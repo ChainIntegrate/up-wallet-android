@@ -55,6 +55,35 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   await p.waitForFunction(() => document.getElementById("wcPaste"));
   ck("an incomplete address is not remembered (the last valid one stays)", (await p.$eval("#upAddress", (e) => e.value)) === UP);
 
+  // Relay calls on the phone: through the native HTTP stack (here a test double), not the web view's fetch.
+  const relay = await p.evaluate(async () => {
+    const calls = [];
+    window.__upwalletHttp = async (o) => {
+      calls.push(o);
+      if (o.url.endsWith("relay/send")) return { status: 502, headers: { "content-type": "application/json" }, data: { error: "send failed", notSent: false } };
+      if (o.url.includes("relay/receipt")) throw new Error("no network");
+      return { status: 200, headers: { "content-type": "application/json" }, data: { ok: true, chains: [8453] } };
+    };
+    const info = await (await fetch("relay/info", { cache: "no-store" })).json();
+    const sent = await fetch("relay/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chainId: 8453, op: { sender: "0x1" } }) });
+    const sentBody = await sent.json();
+    let failed = null;
+    try { await fetch("relay/receipt?hash=0xabc", { cache: "no-store" }); } catch (e) { failed = e.name; }
+    window.__upwalletHttp = null;
+    return { calls, info, status: sent.status, sentBody, failed };
+  });
+  const site = "https://crosschain-lukso.chainintegrate.it/";
+  ck("relay calls go to the site through native HTTP (GET relay/info)", relay.calls[0].url === site + "relay/info" && relay.calls[0].method === "GET" && relay.info.ok === true, JSON.stringify(relay.calls[0]));
+  ck("a POST keeps its JSON body and content type", relay.calls[1].url === site + "relay/send" && relay.calls[1].method === "POST" && relay.calls[1].data.chainId === 8453 && relay.calls[1].headers["content-type"] === "application/json", JSON.stringify(relay.calls[1]));
+  ck("the relay's answer reaches the page unchanged (status 502, notSent: false)", relay.status === 502 && relay.sentBody.notSent === false, JSON.stringify(relay));
+  ck("a network failure rejects, as fetch does (the page treats it as \"not known whether sent\")", relay.failed === "TypeError", relay.failed);
+  const other = await p.evaluate(async () => {
+    const calls = []; window.__upwalletHttp = async (o) => { calls.push(o.url); return { status: 200, headers: {}, data: "" }; };
+    try { await fetch("https://localhost/chains.js"); } catch (e) { /* not relevant */ }
+    window.__upwalletHttp = null; return calls;
+  });
+  ck("other requests (RPCs, the app's own files) are not touched", other.length === 0, JSON.stringify(other));
+
   const html = fs.readFileSync(path.join(WWW, "up-wallet.html"), "utf8");
   ck("WalletConnect metadata: dApps are shown the site and its icon, not https://localhost",
     html.includes('url: "https://crosschain-lukso.chainintegrate.it",') && html.includes('icons: ["https://crosschain-lukso.chainintegrate.it/favicon.ico"]') && !/url: location\.origin/.test(html));

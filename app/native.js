@@ -3,11 +3,44 @@
 // - A wc: link that another app opens with UP Wallet, or text shared to it (Share -> UP Wallet): the
 //   link is put in the field, ready; connecting still takes the user's tap on the page's button.
 // - The UP address and the network are remembered on this phone and filled in at the next start.
+// - Calls to the site's relay service go through Android's HTTP stack (CapacitorHttp), not the web
+//   view's fetch: the app's origin (https://localhost) is not the site's, and the browser's cross-origin
+//   rules would block them. The relay checks UP, controller, limits and paymaster as for the site.
 // Bundled by scripts/build-web.js (esbuild) into www/app/native.js.
 import { Clipboard } from "@capacitor/clipboard";
-import { Capacitor, registerPlugin } from "@capacitor/core";
+import { Capacitor, CapacitorHttp, registerPlugin } from "@capacitor/core";
 
 const IncomingLink = registerPlugin("IncomingLink");
+
+// ---- relay calls ----
+const SITE = window.__upwalletSite || "";
+function relayUrl(input) {
+  if (typeof input !== "string" || !SITE) return null;
+  if (/^\.?\/?relay\//.test(input)) return SITE + input.replace(/^\.?\//, "");
+  return input.startsWith(SITE + "relay/") ? input : null;
+}
+function headersOf(h) {
+  const out = {};
+  if (!h) return out;
+  if (typeof Headers !== "undefined" && h instanceof Headers) h.forEach((v, k) => { out[k.toLowerCase()] = v; });
+  else for (const [k, v] of Object.entries(h)) out[k.toLowerCase()] = String(v);
+  return out;
+}
+const webFetch = window.fetch.bind(window);
+window.fetch = async function (input, init) {
+  const url = relayUrl(input);
+  const http = window.__upwalletHttp || (Capacitor.isNativePlatform() ? (o) => CapacitorHttp.request(o) : null);   // __upwalletHttp: tests
+  if (!url || !http) return webFetch(input, init);
+  const headers = headersOf(init && init.headers);
+  let data = init && init.body != null ? init.body : undefined;
+  if (typeof data === "string" && /json/i.test(headers["content-type"] || "")) { try { data = JSON.parse(data); } catch (e) { /* sent as text */ } }
+  let r;
+  try { r = await http({ url, method: (init && init.method) || "GET", headers, data, responseType: "text", connectTimeout: 15000, readTimeout: 60000 }); }
+  catch (e) { throw new TypeError("Failed to fetch: " + (e && e.message ? e.message : e)); }   // as fetch: a network failure rejects
+  const body = r.data == null ? "" : typeof r.data === "string" ? r.data : JSON.stringify(r.data);
+  try { return new Response(body, { status: r.status, headers: r.headers || {} }); }
+  catch (e) { return new Response(body, { status: r.status, headers: { "content-type": "application/json" } }); }
+};
 const $ = (id) => document.getElementById(id);
 const en = () => document.documentElement.lang === "en";
 const T = {

@@ -4,13 +4,16 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **phase 3**. The app installs, shows the page, uses MetaMask mobile to sign and connects
-to dApps through WalletConnect links (pasted, opened with the app or shared to it); the site relayer
-(phase 4) comes next.
+Status: **phase 4**. The app installs, shows the page, uses MetaMask mobile to sign, connects to
+dApps through WalletConnect links (pasted, opened with the app or shared to it) and can have the
+site relayer pay the gas.
 
 ## What the app adds to the page
 
-- `app/app-shim.js`: relay calls (`relay/...`) go to the site; links to the site's other pages open in
+- `app/app-shim.js`: relay calls (`relay/...`) go to the site (`app/native.js` sends them through
+  Android's HTTP stack, CapacitorHttp: from the app's origin the web view's cross-origin rules would
+  block them; the relay and the sponsor service check UP, controller, limits and paymaster as for the
+  site, and their origin check only applies to requests that carry an Origin); links to the site's other pages open in
   the phone's browser.
 - `app/app.css`: long addresses, hashes and links wrap inside their box (request window, status, log).
 - `app/metamask.js` (bundled with esbuild): MetaMask mobile as the page's signing wallet. It is

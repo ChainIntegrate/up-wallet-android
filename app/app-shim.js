@@ -1,11 +1,13 @@
 // UP Wallet app: the differences between the app and the site page, loaded before the page's own scripts.
-// - The relay service lives on the site: its relative URLs ("relay/...") are sent there.
+// - The relay service lives on the site: its relative URLs ("relay/...") are sent there (and, on the
+//   phone, through native HTTP: see app/native.js).
 // - Links to the site's other pages, which the app does not contain, open in the phone's browser.
 (function () {
   "use strict";
   const SITE = "__SITE__";   // filled in by scripts/build-web.js from app-config.json
   const PAGE = "__PAGE__";
   document.documentElement.classList.add("in-app");
+  window.__upwalletSite = SITE;   // for app/native.js
 
   const toSite = (u) => SITE + u.replace(/^\.?\//, "");
   const ownFetch = window.fetch.bind(window);
