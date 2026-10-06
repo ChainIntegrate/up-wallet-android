@@ -11,6 +11,10 @@
 // - Once the dApp has its answer (signature sent, operation done, simulation, rejection, session
 //   active), a "Back to the dApp" button brings the default browser back to the front, on the tab it
 //   was showing (or, without a default browser, puts UP Wallet in the background).
+// - While a dApp is connected the app stays running (a foreground service with an ongoing notification):
+//   otherwise Android freezes it after a few minutes in the background and requests wait for the user.
+// - Panel 3 suggests MetaMask's auto-lock at 5 minutes: when MetaMask locks while a request is open, it
+//   drops the request (the page gets "User rejected").
 // Bundled by scripts/build-web.js (esbuild) into www/app/native.js.
 import { Clipboard } from "@capacitor/clipboard";
 import { Capacitor, CapacitorHttp, registerPlugin } from "@capacitor/core";
@@ -18,6 +22,7 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 import { App } from "@capacitor/app";
 
 const IncomingLink = registerPlugin("IncomingLink");
+const KeepAlive = registerPlugin("KeepAlive");
 
 // ---- relay calls ----
 const SITE = window.__upwalletSite || "";
@@ -129,10 +134,17 @@ const N = {
   body: (who, what) => (en() ? `${who} asks for ${what}: tap to open UP Wallet.` : `${who} chiede ${what}: tocca per aprire UP Wallet.`),
   back: () => (en() ? "↩ Back to the dApp" : "↩ Torna alla dApp"),
   channel: () => (en() ? "dApp requests" : "Richieste delle dApp"),
+  keep: (who) => (en() ? `Connected to ${who}: UP Wallet stays active to receive its requests.` : `Collegato a ${who}: UP Wallet resta attivo per ricevere le richieste.`),
+  keepChannel: () => (en() ? "Connection to dApps" : "Collegamento alle dApp"),
+  lockTip: () => (en()
+    ? "Tip: in MetaMask set Auto-lock to 5 minutes (Settings → Security & privacy). If MetaMask locks while you are reading a request, it cancels it and the page gets \"rejected\"."
+    : "Consiglio: in MetaMask imposta il Blocco automatico a 5 minuti (Impostazioni → Sicurezza e privacy). Se MetaMask si blocca mentre leggi una richiesta, la annulla e qui risulta \"rifiutata\"."),
 };
+// The dApp's site as shown in the page's lines ("Name (https://site)"): its host, short and verified.
+const hostOf = (url) => { try { return new URL(url).host.replace(/^www\./, ""); } catch (e) { return ""; } };
 const REQ = /^(?:Richiesta dalla dApp|Request from the dApp): (\S+)/;
-const PROP = /^(?:Richiesta di connessione da|Connection request from): (.+?) \(/;
-const SESSION = /(?:Sessione attiva con|Session active with) (.+?) \(/;
+const PROP = /^(?:Richiesta di connessione da|Connection request from): (.+?) \((https?:\/\/[^)\s]+)\)/;
+const SESSION = /(?:Sessione attiva con|Session active with) (.+?) \((https?:\/\/[^)\s]+)\)/;
 const DONE = /Firma inviata alla dApp|Signature sent to the dApp|Operazione eseguita|Operation done|Transazione confermata|Transaction confirmed|Modalità simulazione: niente inviato|Simulation mode: nothing sent|^Richiesta rifiutata|^Request rejected|^❌/;
 let dappName = "", notifId = 1;
 
@@ -150,6 +162,17 @@ async function askPermission() {
     const p = await LocalNotifications.checkPermissions();
     if (p.display === "prompt" || p.display === "prompt-with-rationale") await LocalNotifications.requestPermissions();
   } catch (e) { /* no notifications: the app works without them */ }
+}
+
+// Keeps the app running while a dApp is connected; stops when no session is left.
+let keptFor = null;
+function keepAlive(who) {
+  if (who === keptFor) return;
+  keptFor = who;
+  diag(who ? `Keep-alive: on (${who})` : "Keep-alive: off");
+  const k = window.__upwalletKeepAlive || (native() ? KeepAlive : null);   // __upwalletKeepAlive: tests
+  if (!k) return;
+  (who ? k.start({ text: N.keep(who), channel: N.keepChannel() }) : k.stop()).catch?.((e) => diag("Keep-alive failed: " + (e && e.message)));
 }
 
 let backBtn = null, backTimer = null;
@@ -183,7 +206,7 @@ function addBackButton() {
 function watchPage() {
   const onLine = (t) => {
     let m;
-    if ((m = t.match(PROP))) { dappName = m[1]; showBack(false); notify(N.connect()); }
+    if ((m = t.match(PROP))) { dappName = hostOf(m[2]) || m[1]; showBack(false); notify(N.connect()); }
     else if ((m = t.match(REQ))) { showBack(false); notify(/sendTransaction/.test(m[1]) ? N.tx() : N.sign()); }
     else if (DONE.test(t)) showBack(true);
   };
@@ -192,11 +215,18 @@ function watchPage() {
   const st = $("wcStatus");
   if (st) new MutationObserver(() => {
     const m = (st.textContent || "").match(SESSION);
-    if (m) { dappName = m[1]; showBack(true); }
+    if (m) { dappName = hostOf(m[2]) || m[1]; showBack(true); }
+    keepAlive(m ? dappName : null);
   }).observe(st, { childList: true, subtree: true, characterData: true });
+  const signer = $("connectSigner");
+  if (signer && !$("mmLockTip")) {
+    const tip = document.createElement("div");
+    tip.id = "mmLockTip"; tip.className = "note"; tip.style.marginTop = "6px";
+    tip.textContent = N.lockTip();
+    signer.insertAdjacentElement("afterend", tip);
+  }
   const pair = $("pairBtn");
   if (pair) pair.addEventListener("click", askPermission);
-  const signer = $("connectSigner");
   if (signer) signer.addEventListener("click", askPermission);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && native()) LocalNotifications.removeAllDeliveredNotifications().catch(() => null);

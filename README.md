@@ -29,6 +29,12 @@ site relayer pay the gas.
   Local Notifications; Android asks for the permission when you connect MetaMask or a dApp): a tap
   brings UP Wallet to the front. Once the dApp has its answer, a "Back to the dApp" button brings the
   default browser back to the front, on the tab it was showing.
+- While a dApp is connected, the app stays running (`KeepAliveService`, a foreground service of type
+  dataSync with an ongoing notification): otherwise Android freezes it after a few minutes in the
+  background and a dApp's request waits until UP Wallet is opened by hand. Stopped when no session is
+  left. Android 15+ limits this service type to about 6 hours a day.
+- Panel 3 suggests MetaMask's Auto-lock at 5 minutes: when MetaMask locks with a request open, it
+  drops it and the page gets "User rejected".
 - The WalletConnect metadata shown to dApps names the site and its icon, not the app's origin.
 - A MetaMask connection kept for fewer networks than asked is dropped before connecting (MetaMask
   answered "connection not found" to the old one).

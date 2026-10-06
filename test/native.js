@@ -115,11 +115,28 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
     return { sent, mins: mins.length, before, shown, text, afterClick, shownAgain, hiddenOnNew };
   });
   ck("in the background, each dApp request shows a notification naming the dApp and what it asks",
-    JSON.stringify(nb.sent) === JSON.stringify(["OpenSea, exchange everything chiede di collegarsi: tocca per aprire UP Wallet.", "OpenSea, exchange everything chiede una firma: tocca per aprire UP Wallet.", "OpenSea, exchange everything chiede una transazione: tocca per aprire UP Wallet."]), JSON.stringify(nb.sent));
+    JSON.stringify(nb.sent) === JSON.stringify(["opensea.io chiede di collegarsi: tocca per aprire UP Wallet.", "opensea.io chiede una firma: tocca per aprire UP Wallet.", "opensea.io chiede una transazione: tocca per aprire UP Wallet."]), JSON.stringify(nb.sent));
   ck("no notification when UP Wallet is already in the foreground", nb.sent.length === 3);
   ck("\"Back to the dApp\" appears once the dApp has its answer (signature sent, operation done), and hides on a new request",
     nb.before && nb.shown && nb.text === "↩ Torna alla dApp" && nb.afterClick && nb.shownAgain && nb.hiddenOnNew, JSON.stringify(nb));
   ck("\"Back to the dApp\" puts UP Wallet in the background", nb.mins === 1);
+
+  // Keep-alive while a dApp session is active; the MetaMask auto-lock tip.
+  const ka = await p.evaluate(async () => {
+    const calls = [];
+    window.__upwalletKeepAlive = { start: async (o) => calls.push("start: " + o.text), stop: async () => calls.push("stop") };
+    const st = document.getElementById("wcStatus");
+    const tick = () => new Promise((r) => setTimeout(r, 30));
+    st.textContent = "✅ Sessione attiva con OpenSea, exchange everything — token trading (https://opensea.io) — account presentato: 0x4a26 su chainId 8453."; await tick();
+    st.textContent = st.textContent + " "; await tick();   // the same session again: no second start
+    st.textContent = "Nessuna sessione."; await tick();
+    window.__upwalletKeepAlive = null;
+    const tip = document.getElementById("mmLockTip");
+    return { calls, tip: tip && tip.textContent, after: tip && tip.previousElementSibling && tip.previousElementSibling.id };
+  });
+  ck("while a dApp session is active the app stays running (one start, named by the dApp's host); stops when none is left",
+    JSON.stringify(ka.calls) === JSON.stringify(["start: Collegato a opensea.io: UP Wallet resta attivo per ricevere le richieste.", "stop"]), JSON.stringify(ka.calls));
+  ck("panel 3 suggests MetaMask's auto-lock at 5 minutes", ka.after === "connectSigner" && /Blocco automatico a 5 minuti/.test(ka.tip || ""), JSON.stringify(ka));
 
   // Diagnostic log: kept across restarts, shown under the page's log with Copy and Clear.
   await p.evaluate(() => window.upwDiag.add("marker-before-restart"));
