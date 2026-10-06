@@ -4,7 +4,7 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **phase 1**. The app installs and shows the page; connecting MetaMask (phase 2), opening
+Status: **phase 2**. The app installs, shows the page and uses MetaMask mobile to sign; opening
 WalletConnect links from dApps (phase 3) and the site relayer (phase 4) come next.
 
 ## What the app adds to the page
@@ -12,6 +12,11 @@ WalletConnect links from dApps (phase 3) and the site relayer (phase 4) come nex
 - `app/app-shim.js`: relay calls (`relay/...`) go to the site; links to the site's other pages open in
   the phone's browser.
 - `app/app.css`: long addresses, hashes and links wrap inside their box (request window, status, log).
+- `app/metamask.js` (bundled with esbuild): MetaMask mobile as the page's signing wallet. It is
+  announced to the page through EIP-6963 as "MetaMask (app)", the way the browser extension is, and
+  backed by MetaMask Connect (`@metamask/connect-evm`), which reaches the MetaMask app through
+  MetaMask's relay and opens it with `metamask://` links for each confirmation. Analytics are off.
+  The page code does not change.
 - ethers is bundled from the npm package, checked against the page's own SRI hash; nothing is loaded
   from a CDN.
 - `config.js` is generated from `app-config.json`.
