@@ -57,3 +57,15 @@ To take a newer version of the page, change the commit in `UPSTREAM.json`.
 APKs are signed with `android/app/prototype.keystore`, a key kept in the repository on purpose so
 that each new APK installs over the previous one. It is for this prototype only: a Play Store release
 will be signed with a different key that never enters the repository.
+
+## Before the repository or the app goes public
+
+- **App origin and Reown allowlist**: the app runs as `https://localhost` (Capacitor's default), and
+  `localhost` is in the allowed domains of the Reown project, so any page served on localhost may use
+  that Project ID. Set `server.hostname` in `capacitor.config.json` to a subdomain we own (e.g.
+  `upwallet.chainintegrate.it`; no DNS record needed), then on cloud.reown.com add it and remove
+  `localhost`. App data (remembered UP and network, MetaMask connection) is reset once by the change.
+- Optionally a separate Reown project for the app (own quota and statistics).
+- Release signing key outside the repository (`prototype.keystore` is for this prototype only).
+- Privacy policy page (on the site) for the Play Store listing.
+- Remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests).
