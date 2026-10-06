@@ -46,7 +46,9 @@ function note(text) {
   d.className = "line-dim";
   d.textContent = `${new Date().toLocaleTimeString()} ${text}`;
   log.appendChild(d);
+  diag(text);
 }
+function diag(text) { if (window.upwDiag) window.upwDiag.add(text); }
 function openLink(url) {
   const now = Date.now();
   const what = /\/mwp\?/.test(url) ? "request" : "connection";
@@ -112,22 +114,39 @@ let connected = false;
 async function follow() {
   const id = selectedChain();
   if (!client || !connected || !id) return;
+  diag(`MetaMask: network ${id}`);
   try { await client.switchChain({ chainId: id }); } catch (e) { console.error("Network change refused", e); }
+}
+
+async function requestInner(args) {
+  const c = client || await start();
+  if (args && (args.method === "eth_requestAccounts" || args.method === "wallet_requestPermissions")) {
+    const chainIds = wantedChains();
+    const r = await c.connect({ chainIds });
+    connected = true;
+    try { localStorage.setItem(CHAINS_KEY, JSON.stringify([...new Set([...approvedChains(), ...chainIds])])); } catch (e) { /* not kept */ }
+    await follow();
+    return args.method === "eth_requestAccounts" ? r.accounts : c.getProvider().request(args);
+  }
+  return c.getProvider().request(args);
 }
 
 const provider = {
   isUpWalletApp: true,
   async request(args) {
-    const c = client || await start();
-    if (args && (args.method === "eth_requestAccounts" || args.method === "wallet_requestPermissions")) {
-      const chainIds = wantedChains();
-      const r = await c.connect({ chainIds });
-      connected = true;
-      try { localStorage.setItem(CHAINS_KEY, JSON.stringify([...new Set([...approvedChains(), ...chainIds])])); } catch (e) { /* not kept */ }
-      await follow();
-      return args.method === "eth_requestAccounts" ? r.accounts : c.getProvider().request(args);
+    const m = args && args.method;
+    const toWallet = m && !/^eth_(chainId|accounts)$/.test(m);
+    if (!toWallet) return requestInner(args);
+    const t0 = Date.now();
+    diag(`MetaMask → ${m}`);
+    try {
+      const r = await requestInner(args);
+      diag(`MetaMask ← ${m}: ok (${Math.round((Date.now() - t0) / 1000)} s)`);
+      return r;
+    } catch (e) {
+      diag(`MetaMask ← ${m}: ${(e && (e.code != null ? e.code + " " : "") + (e.message || "")).slice(0, 100)} (${Math.round((Date.now() - t0) / 1000)} s)`);
+      throw e;
     }
-    return c.getProvider().request(args);
   },
   on(ev, fn) {
     if (client) client.getProvider().on(ev, fn); else listeners.push([ev, fn]);
@@ -157,7 +176,10 @@ function cameBack() {
   window.dispatchEvent(new Event("focus"));
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") cameBack(); });
-if (Capacitor.isNativePlatform()) App.addListener("resume", cameBack).catch(() => null);
+if (Capacitor.isNativePlatform()) {
+  App.addListener("resume", () => { diag("Android: resume"); cameBack(); }).catch(() => null);
+  App.addListener("pause", () => diag("Android: pause")).catch(() => null);
+}
 
 const announce = () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: Object.freeze({ info: INFO, provider }) }));
 window.addEventListener("eip6963:requestProvider", announce);

@@ -103,6 +103,8 @@ async function page(b, bundle) {
   const logged = await p.$$eval("#log .line-dim", (els) => els.map((e) => e.textContent).join("\n"));
   ck("each opening of MetaMask is noted in the page's log, and so is a skipped repeat",
     (logged.match(/Apertura di MetaMask \(richiesta\)/g) || []).length === 2 && /già aperto, non riaperto/.test(logged), logged);
+  const dl = await p.evaluate(() => JSON.parse(localStorage.getItem("upwallet.diag") || "[]").join("\n"));
+  ck("diagnostic log: app start, the MetaMask calls with their outcome, the openings", /Avvio dell'app/.test(dl) && /MetaMask → eth_requestAccounts/.test(dl) && /MetaMask ← eth_requestAccounts: ok/.test(dl) && /MetaMask ← personal_sign: ok/.test(dl) && /Apertura di MetaMask \(richiesta\)/.test(dl) && !/0x[0-9a-fA-F]{40}/.test(dl), dl);
   const back = await p.evaluate(async () => {
     let focus = 0; window.addEventListener("focus", () => { focus++; });
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });

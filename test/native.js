@@ -84,6 +84,16 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   });
   ck("other requests (RPCs, the app's own files) are not touched", other.length === 0, JSON.stringify(other));
 
+  // Diagnostic log: kept across restarts, shown under the page's log with Copy and Clear.
+  await p.evaluate(() => window.upwDiag.add("marker-before-restart"));
+  await p.reload();
+  await p.waitForFunction(() => document.getElementById("wcPaste"));
+  const diag = await p.evaluate(() => {
+    const d = document.querySelector("#log + details");
+    return { summary: d && d.querySelector("summary").textContent, text: d && d.querySelector("pre").textContent, buttons: d ? [...d.querySelectorAll("button")].map((b) => b.textContent) : [] };
+  });
+  ck("diagnostic log survives a restart and shows the restart", diag.summary === "Registro diagnostico (app)" && /marker-before-restart[\s\S]*Avvio dell'app/.test(diag.text) && diag.buttons.join(",") === "Copia,Svuota", JSON.stringify(diag));
+
   const html = fs.readFileSync(path.join(WWW, "up-wallet.html"), "utf8");
   ck("WalletConnect metadata: dApps are shown the site and its icon, not https://localhost",
     html.includes('url: "https://crosschain-lukso.chainintegrate.it",') && html.includes('icons: ["https://crosschain-lukso.chainintegrate.it/favicon.ico"]') && !/url: location\.origin/.test(html));
