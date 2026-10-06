@@ -25,6 +25,10 @@ site relayer pay the gas.
   app or text shared to it (Share -> UP Wallet) is put in the link field (the native side is
   `IncomingLinkPlugin.java`); connecting still takes a tap on the page's button. The UP address and
   the network are remembered on the phone.
+- A dApp request that arrives while UP Wallet is in the background shows a notification (Capacitor
+  Local Notifications; Android asks for the permission when you connect MetaMask or a dApp): a tap
+  brings UP Wallet to the front. Once the dApp has its answer, a "Back to the dApp" button puts UP
+  Wallet in the background, back to the browser.
 - The WalletConnect metadata shown to dApps names the site and its icon, not the app's origin.
 - A MetaMask connection kept for fewer networks than asked is dropped before connecting (MetaMask
   answered "connection not found" to the old one).

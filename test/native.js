@@ -84,6 +84,43 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   });
   ck("other requests (RPCs, the app's own files) are not touched", other.length === 0, JSON.stringify(other));
 
+  // Notifications for dApp requests while in the background, and the way back to the dApp.
+  const nb = await p.evaluate(async () => {
+    const sent = [], mins = [];
+    window.__upwalletNotify = (n) => sent.push(n.body);
+    window.__upwalletMinimize = () => mins.push(1);
+    const log = document.getElementById("log");
+    const line = (t) => { const d = document.createElement("div"); d.textContent = t; log.appendChild(d); };
+    const tick = () => new Promise((r) => setTimeout(r, 30));
+    let hidden = true;
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    line("Richiesta di connessione da: OpenSea, exchange everything (https://opensea.io) — verifica del dominio: VALID"); await tick();
+    line("Richiesta dalla dApp: personal_sign"); await tick();
+    line("Richiesta dalla dApp: eth_sendTransaction"); await tick();
+    hidden = false;
+    line("Richiesta dalla dApp: personal_sign"); await tick();   // in the foreground: no notification
+    const btn = document.getElementById("backToDapp");
+    const before = btn.hidden;
+    line("✅ La UP riconosce la firma come propria. Firma inviata alla dApp."); await tick();
+    const shown = !btn.hidden, text = btn.textContent;
+    btn.click(); await tick();
+    const afterClick = btn.hidden;
+    line("Richiesta dalla dApp: eth_sendTransaction"); await tick();
+    line("✅ Operazione eseguita."); await tick();
+    const shownAgain = !btn.hidden;
+    line("Richiesta dalla dApp: personal_sign"); await tick();
+    const hiddenOnNew = btn.hidden;
+    window.__upwalletNotify = null; window.__upwalletMinimize = null;
+    delete document.hidden;
+    return { sent, mins: mins.length, before, shown, text, afterClick, shownAgain, hiddenOnNew };
+  });
+  ck("in the background, each dApp request shows a notification naming the dApp and what it asks",
+    JSON.stringify(nb.sent) === JSON.stringify(["OpenSea, exchange everything chiede di collegarsi: tocca per aprire UP Wallet.", "OpenSea, exchange everything chiede una firma: tocca per aprire UP Wallet.", "OpenSea, exchange everything chiede una transazione: tocca per aprire UP Wallet."]), JSON.stringify(nb.sent));
+  ck("no notification when UP Wallet is already in the foreground", nb.sent.length === 3);
+  ck("\"Back to the dApp\" appears once the dApp has its answer (signature sent, operation done), and hides on a new request",
+    nb.before && nb.shown && nb.text === "↩ Torna alla dApp" && nb.afterClick && nb.shownAgain && nb.hiddenOnNew, JSON.stringify(nb));
+  ck("\"Back to the dApp\" puts UP Wallet in the background", nb.mins === 1);
+
   // Diagnostic log: kept across restarts, shown under the page's log with Copy and Clear.
   await p.evaluate(() => window.upwDiag.add("marker-before-restart"));
   await p.reload();

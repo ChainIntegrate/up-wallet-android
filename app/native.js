@@ -6,9 +6,15 @@
 // - Calls to the site's relay service go through Android's HTTP stack (CapacitorHttp), not the web
 //   view's fetch: the app's origin (https://localhost) is not the site's, and the browser's cross-origin
 //   rules would block them. The relay checks UP, controller, limits and paymaster as for the site.
+// - A request from a dApp that arrives while UP Wallet is in the background shows a notification: a tap
+//   brings UP Wallet to the front (Android does not let an app bring itself to the front).
+// - Once the dApp has its answer (signature sent, operation done, simulation, rejection, session
+//   active), a "Back to the dApp" button puts UP Wallet in the background, back to the browser.
 // Bundled by scripts/build-web.js (esbuild) into www/app/native.js.
 import { Clipboard } from "@capacitor/clipboard";
 import { Capacitor, CapacitorHttp, registerPlugin } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
+import { App } from "@capacitor/app";
 
 const IncomingLink = registerPlugin("IncomingLink");
 
@@ -112,7 +118,89 @@ function remember() {
   });
 }
 
+// ---- notifications and the way back to the dApp ----
+const native = () => Capacitor.isNativePlatform();
+const diag = (t) => { if (window.upwDiag) window.upwDiag.add(t); };
+const N = {
+  sign: () => (en() ? "a signature" : "una firma"),
+  tx: () => (en() ? "a transaction" : "una transazione"),
+  connect: () => (en() ? "to connect" : "di collegarsi"),
+  body: (who, what) => (en() ? `${who} asks for ${what}: tap to open UP Wallet.` : `${who} chiede ${what}: tocca per aprire UP Wallet.`),
+  back: () => (en() ? "↩ Back to the dApp" : "↩ Torna alla dApp"),
+  channel: () => (en() ? "dApp requests" : "Richieste delle dApp"),
+};
+const REQ = /^(?:Richiesta dalla dApp|Request from the dApp): (\S+)/;
+const PROP = /^(?:Richiesta di connessione da|Connection request from): (.+?) \(/;
+const SESSION = /(?:Sessione attiva con|Session active with) (.+?) \(/;
+const DONE = /Firma inviata alla dApp|Signature sent to the dApp|Operazione eseguita|Operation done|Transazione confermata|Transaction confirmed|Modalità simulazione: niente inviato|Simulation mode: nothing sent|^Richiesta rifiutata|^Request rejected|^❌/;
+let dappName = "", notifId = 1;
+
+async function notify(what) {
+  if (!document.hidden) return;
+  const n = { id: notifId++, title: "UP Wallet", body: N.body(dappName || "dApp", what), channelId: "requests" };
+  diag((en() ? "Notification: " : "Notifica: ") + n.body);
+  if (window.__upwalletNotify) return window.__upwalletNotify(n);   // tests
+  if (!native()) return;
+  try { await LocalNotifications.schedule({ notifications: [n] }); } catch (e) { diag("Notification failed: " + (e && e.message)); }
+}
+async function askPermission() {
+  if (!native()) return;
+  try {
+    const p = await LocalNotifications.checkPermissions();
+    if (p.display === "prompt" || p.display === "prompt-with-rationale") await LocalNotifications.requestPermissions();
+  } catch (e) { /* no notifications: the app works without them */ }
+}
+
+let backBtn = null, backTimer = null;
+function showBack(on) {
+  if (!backBtn) return;
+  clearTimeout(backTimer);
+  backBtn.hidden = !on;
+  if (on) backTimer = setTimeout(() => { backBtn.hidden = true; }, 30000);
+}
+function addBackButton() {
+  backBtn = document.createElement("button");
+  backBtn.id = "backToDapp";
+  backBtn.type = "button";
+  backBtn.hidden = true;
+  backBtn.textContent = N.back();
+  backBtn.style.cssText = "position:fixed; right:12px; bottom:12px; z-index:80; width:auto; padding:12px 16px; border-radius:24px; box-shadow:0 4px 16px rgba(0,0,0,0.4);";
+  backBtn.addEventListener("click", () => {
+    showBack(false);
+    diag(en() ? "Back to the dApp." : "Torna alla dApp.");
+    if (window.__upwalletMinimize) return window.__upwalletMinimize();   // tests
+    if (native()) App.minimizeApp().catch(() => null);
+  });
+  document.body.appendChild(backBtn);
+}
+
+function watchPage() {
+  const onLine = (t) => {
+    let m;
+    if ((m = t.match(PROP))) { dappName = m[1]; showBack(false); notify(N.connect()); }
+    else if ((m = t.match(REQ))) { showBack(false); notify(/sendTransaction/.test(m[1]) ? N.tx() : N.sign()); }
+    else if (DONE.test(t)) showBack(true);
+  };
+  const log = $("log");
+  if (log) new MutationObserver((muts) => { for (const mu of muts) for (const n of mu.addedNodes) onLine((n.textContent || "").trim()); }).observe(log, { childList: true });
+  const st = $("wcStatus");
+  if (st) new MutationObserver(() => {
+    const m = (st.textContent || "").match(SESSION);
+    if (m) { dappName = m[1]; showBack(true); }
+  }).observe(st, { childList: true, subtree: true, characterData: true });
+  const pair = $("pairBtn");
+  if (pair) pair.addEventListener("click", askPermission);
+  const signer = $("connectSigner");
+  if (signer) signer.addEventListener("click", askPermission);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && native()) LocalNotifications.removeAllDeliveredNotifications().catch(() => null);
+  });
+  if (native()) LocalNotifications.createChannel({ id: "requests", name: N.channel(), importance: 5, visibility: 1, vibration: true }).catch(() => null);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  addBackButton();
+  watchPage();
   remember();
   addPasteButton();
   if (Capacitor.isNativePlatform()) {
