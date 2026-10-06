@@ -1,0 +1,12 @@
+/* UP Wallet app: phone layout. Only long unbroken text (addresses, hashes, links) is changed, so that
+   it wraps inside its box instead of widening the page and the request window. */
+html.in-app .modal-notes, html.in-app .modal-sub, html.in-app .status-box, html.in-app #log,
+html.in-app .kv .v, html.in-app .kv pre { overflow-wrap: anywhere; word-break: break-word; }
+html.in-app .modal, html.in-app .modal-body, html.in-app .modal-head, html.in-app .panel { min-width: 0; }
+@media (max-width: 560px) {
+  html.in-app body { padding: 20px 16px 80px; }
+  html.in-app .modal-backdrop { padding: 8px; }
+  html.in-app .modal { max-height: calc(100vh - 16px); }
+  html.in-app .modal-head, html.in-app .modal-body { padding-left: 12px; padding-right: 12px; }
+  html.in-app .modal-foot { padding: 10px 12px 12px; }
+}

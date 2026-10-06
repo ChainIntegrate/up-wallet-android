@@ -1,0 +1,55 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install
+        run: npm ci
+
+      - name: Web content from Cross_Chain at the pinned commit
+        run: npm run web
+
+      - name: Layout test at phone width
+        run: |
+          npx --yes playwright@1.56.1 install --with-deps chromium
+          npm install --no-save playwright@1.56.1
+          npm test
+
+      - name: Copy into the Android project
+        run: npx cap sync android
+
+      - name: Build the APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Name the APK after the commit
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "up-wallet-${GITHUB_SHA::7}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: up-wallet-apk
+          path: up-wallet-*.apk
+          retention-days: 30

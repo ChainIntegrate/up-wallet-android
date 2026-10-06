@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">UP Wallet</string>
+    <string name="title_activity_main">UP Wallet</string>
+    <string name="package_name">it.chainintegrate.upwallet</string>
+    <string name="custom_url_scheme">it.chainintegrate.upwallet</string>
+</resources>
