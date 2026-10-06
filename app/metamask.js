@@ -34,8 +34,29 @@ function selectedChain() {
 const MAIN_CHAINS = ["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"];   // Base, Polygon, Arbitrum, Avalanche, Ethereum
 
 // MetaMask is opened through Android (an intent), not by navigating the app's web view.
+// MetaMask Connect may ask to open the same link twice for one request (two code paths); opening it
+// again made MetaMask show the same request more than once. The same link within 5 s is opened once.
+let lastLink = { url: null, at: 0 };
+// Each opening is noted in the page's log (prototype: to tell apart repeated requests from MetaMask).
+function note(text) {
+  const log = document.getElementById("log");
+  if (!log) return;
+  const d = document.createElement("div");
+  d.className = "line-dim";
+  d.textContent = `${new Date().toLocaleTimeString()} ${text}`;
+  log.appendChild(d);
+}
 function openLink(url) {
-  if (!Capacitor.isNativePlatform()) { window.location.href = url; return; }
+  const now = Date.now();
+  const what = /\/mwp\?/.test(url) ? "request" : "connection";
+  const en = document.documentElement.lang === "en";
+  if (url === lastLink.url && now - lastLink.at < 5000) {
+    note(en ? `MetaMask (${what}): already opened, not opened again.` : `MetaMask (${what === "request" ? "richiesta" : "collegamento"}): già aperto, non riaperto.`);
+    return;
+  }
+  lastLink = { url, at: now };
+  note(en ? `MetaMask opened (${what}).` : `Apertura di MetaMask (${what === "request" ? "richiesta" : "collegamento"}).`);
+  if (!Capacitor.isNativePlatform()) { (window.__upwalletOpenLink || ((u) => { window.location.href = u; }))(url); return; }   // web: tests
   AppLauncher.openUrl({ url }).then((r) => {
     if (r && r.completed === false) window.alert(document.documentElement.lang === "en"
       ? "MetaMask could not be opened. Is the MetaMask app installed on this phone?"

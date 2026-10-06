@@ -92,6 +92,17 @@ async function page(b, bundle) {
     return got[0].request({ method: "personal_sign", params: ["0x1234", "0x406f822aC86b61d4cDf4cD84833f7e5561609C02"] });
   });
   ck("a signature request goes to MetaMask and its answer comes back", sig === "0x" + "11".repeat(65), sig);
+  const opened = await p.evaluate(async () => {
+    const seen = []; window.__upwalletOpenLink = (u) => seen.push(u);
+    const open = window.__mm.options.mobile.preferredOpenLink;
+    open("metamask://mwp?id=A", "_self"); open("metamask://mwp?id=A", "_self"); open("metamask://mwp?id=B", "_self");
+    return seen;
+  });
+  ck("the same MetaMask link asked twice in a row is opened once (one request shown once in MetaMask)",
+    JSON.stringify(opened) === JSON.stringify(["metamask://mwp?id=A", "metamask://mwp?id=B"]), JSON.stringify(opened));
+  const logged = await p.$$eval("#log .line-dim", (els) => els.map((e) => e.textContent).join("\n"));
+  ck("each opening of MetaMask is noted in the page's log, and so is a skipped repeat",
+    (logged.match(/Apertura di MetaMask \(richiesta\)/g) || []).length === 2 && /già aperto, non riaperto/.test(logged), logged);
   ck("no page errors (with the test double)", !errs.length, errs.join("\n"));
   await p.close();
 
