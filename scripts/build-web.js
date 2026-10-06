@@ -49,7 +49,7 @@ function source() {
   return dir;
 }
 
-function main() {
+async function main() {
   const src = source();
   fs.rmSync(OUT, { recursive: true, force: true });
   for (const f of FILES) {
@@ -90,7 +90,21 @@ function main() {
   fs.writeFileSync(path.join(OUT, "app", "app-shim.js"),
     fs.readFileSync(path.join(ROOT, "app", "app-shim.js"), "utf8").replace("__SITE__", site).replace("__PAGE__", PAGE));
   fs.copyFileSync(path.join(ROOT, "app", "app.css"), path.join(OUT, "app", "app.css"));
-  for (const name of ["metamask.js", "native.js"]) require("esbuild").buildSync({
+  // MetaMask Connect gives each request 60 s to come back. On a phone the user goes to MetaMask, reads,
+  // confirms and comes back: that often takes longer ("Transport request timed out"). 5 minutes here.
+  const TIMEOUT_FROM = "DEFAULT_REQUEST_TIMEOUT2 = 60 * 1e3;", TIMEOUT_TO = "DEFAULT_REQUEST_TIMEOUT2 = 5 * 60 * 1e3;";
+  const mmTimeout = {
+    name: "metamask-request-timeout",
+    setup(b) {
+      b.onLoad({ filter: /connect-multichain[\\/]dist[\\/]browser[\\/]es[\\/]connect-multichain\.mjs$/ }, (args) => {
+        const src = fs.readFileSync(args.path, "utf8");
+        if (!src.includes(TIMEOUT_FROM)) throw new Error("MetaMask Connect request timeout not found: check the new version");
+        return { contents: src.replace(TIMEOUT_FROM, TIMEOUT_TO), loader: "js" };
+      });
+    },
+  };
+  for (const name of ["metamask.js", "native.js"]) await require("esbuild").build({
+    plugins: [mmTimeout],
     entryPoints: [path.join(ROOT, "app", name)], outfile: path.join(OUT, "app", name),
     bundle: true, format: "iife", platform: "browser", target: "es2020", minify: true, legalComments: "none", logLevel: "warning",
     define: { "process.env.NODE_ENV": '"production"', global: "globalThis" },
@@ -102,4 +116,4 @@ function main() {
   console.log(`www/ built from Cross_Chain ${upstream.commit.slice(0, 7)}: ${FILES.length + 6} files.`);
 }
 
-main();
+main().catch((e) => { console.error(e); process.exit(1); });

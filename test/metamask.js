@@ -104,6 +104,11 @@ async function page(b, bundle) {
   }));
   ck("real bundle: loads without errors and announces the wallet", real[0] === "it.chainintegrate.upwallet.metamask" && !errs.length, JSON.stringify(real) + errs.join("\n"));
 
+  const bundle = fs.readFileSync(path.join(WWW, "app", "metamask.js"), "utf8");
+  const m = bundle.match(/requestTimeout:(\w+),connectionTimeout/);
+  ck("each MetaMask request may take up to 5 minutes (MetaMask Connect's default is 60 s)",
+    m && new RegExp("[,;{(\\s]" + m[1].replace("$", "\\$") + "=300\\*1e3[,;]").test(bundle), m && m[0]);
+
   await b.close();
   console.log(res.join("\n"));
   console.log(`${res.filter((r) => r.startsWith("PASS")).length}/${res.length}`);
