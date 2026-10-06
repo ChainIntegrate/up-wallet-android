@@ -4,8 +4,9 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **phase 2**. The app installs, shows the page and uses MetaMask mobile to sign; opening
-WalletConnect links from dApps (phase 3) and the site relayer (phase 4) come next.
+Status: **phase 3**. The app installs, shows the page, uses MetaMask mobile to sign and connects
+to dApps through WalletConnect links (pasted, opened with the app or shared to it); the site relayer
+(phase 4) comes next.
 
 ## What the app adds to the page
 
@@ -17,9 +18,17 @@ WalletConnect links from dApps (phase 3) and the site relayer (phase 4) come nex
   backed by MetaMask Connect (`@metamask/connect-evm`), which reaches the MetaMask app through
   MetaMask's relay and opens it with `metamask://` links for each confirmation. Analytics are off.
   The page code does not change.
+- `app/native.js` (bundled): a Paste button for the WalletConnect link; a `wc:` link opened with the
+  app or text shared to it (Share -> UP Wallet) is put in the link field (the native side is
+  `IncomingLinkPlugin.java`); connecting still takes a tap on the page's button. The UP address and
+  the network are remembered on the phone.
+- The WalletConnect metadata shown to dApps names the site and its icon, not the app's origin.
+- A MetaMask connection kept for fewer networks than asked is dropped before connecting (MetaMask
+  answered "connection not found" to the old one).
 - ethers is bundled from the npm package, checked against the page's own SRI hash; nothing is loaded
   from a CDN.
-- `config.js` is generated from `app-config.json`.
+- `config.js` is generated from `app-config.json` (WalletConnect Project ID; on cloud.reown.com the
+  project's allowed domains include `localhost`, the app's origin).
 
 The app holds no keys: signing stays in MetaMask. Backups of app data are off (`allowBackup="false"`).
 

@@ -43,19 +43,36 @@ function openLink(url) {
   }, (e) => console.error("Cannot open MetaMask", e));
 }
 
+// The networks of the last approved connection. A connection kept by MetaMask Connect for fewer
+// networks than asked now is not reused: MetaMask may no longer know it ("connection not found").
+const CHAINS_KEY = "upwallet.metamask.chains";
+const approvedChains = () => { try { return JSON.parse(localStorage.getItem(CHAINS_KEY)) || []; } catch (e) { return []; } };
+async function dropOldConnection(want) {
+  const had = approvedChains();
+  if (want.every((c) => had.includes(c))) return;
+  try {
+    const dbs = indexedDB.databases ? await indexedDB.databases() : [];
+    await Promise.all(dbs.filter((d) => d.name && d.name.startsWith("mmconnect")).map((d) => new Promise((ok) => {
+      const r = indexedDB.deleteDatabase(d.name); r.onsuccess = r.onerror = r.onblocked = () => ok();
+    })));
+  } catch (e) { console.error("Cannot clear the old MetaMask connection", e); }
+  try { localStorage.removeItem(CHAINS_KEY); } catch (e) { /* nothing stored */ }
+}
+const wantedChains = () => [...new Set([selectedChain(), ...MAIN_CHAINS].filter(Boolean))];
+
 let client = null;
 let starting = null;
 const listeners = [];   // [event, handler] added before the client existed
 
 function start() {
   if (!starting) {
-    starting = createEVMClient({
+    starting = dropOldConnection(wantedChains()).then(() => createEVMClient({
       dapp: { name: "UP Wallet (ChainIntegrate)", url: "https://crosschain-lukso.chainintegrate.it" },
       api: { supportedNetworks: supportedNetworks() },
       analytics: { enabled: false },
       mobile: { preferredOpenLink: openLink, useDeeplink: true },
       skipAutoAnnounce: true,
-    }).then((c) => {
+    })).then((c) => {
       client = c;
       const p = c.getProvider();
       for (const [ev, fn] of listeners) p.on(ev, fn);
@@ -81,10 +98,10 @@ const provider = {
   async request(args) {
     const c = client || await start();
     if (args && (args.method === "eth_requestAccounts" || args.method === "wallet_requestPermissions")) {
-      const id = selectedChain();
-      const chainIds = [...new Set([id, ...MAIN_CHAINS].filter(Boolean))];
+      const chainIds = wantedChains();
       const r = await c.connect({ chainIds });
       connected = true;
+      try { localStorage.setItem(CHAINS_KEY, JSON.stringify([...new Set([...approvedChains(), ...chainIds])])); } catch (e) { /* not kept */ }
       await follow();
       return args.method === "eth_requestAccounts" ? r.accounts : c.getProvider().request(args);
     }

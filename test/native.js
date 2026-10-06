@@ -1,0 +1,68 @@
+// app/native.js in the page (as a web page: the Android parts, like links received from other apps,
+// are checked on the phone): Paste button, wc: links found in what is pasted, UP and network
+// remembered across restarts, WalletConnect metadata naming the site. Run after `npm run web`.
+"use strict";
+const fs = require("fs"), path = require("path");
+const { chromium } = require(process.env.PLAYWRIGHT || "playwright");
+
+const WWW = path.join(__dirname, "..", "www");
+const TYPES = { ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".ico": "image/x-icon", ".html": "text/html" };
+const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${n}${c ? "" : "\n      " + String(x).slice(0, 1200)}`);
+const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
+
+(async () => {
+  const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
+  const ctx = await b.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true, permissions: ["clipboard-read", "clipboard-write"] });
+  const errs = [];
+  await ctx.route("**/*", (r) => {
+    const u = new URL(r.request().url());
+    if (u.host !== "localhost") return r.abort();
+    const f = path.join(WWW, decodeURIComponent(u.pathname === "/" ? "/index.html" : u.pathname));
+    if (!fs.existsSync(f)) return r.fulfill({ status: 404, body: "" });
+    r.fulfill({ body: fs.readFileSync(f), contentType: TYPES[path.extname(f)] || "application/octet-stream" });
+  });
+  let p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
+  p.on("dialog", (d) => { errs.push("dialog: " + d.message()); d.dismiss(); });
+  await p.goto("https://localhost/up-wallet.html");
+  await p.waitForFunction(() => document.getElementById("wcPaste"));
+
+  const btn = await p.evaluate(() => { const b = document.getElementById("wcPaste"); return { text: b.textContent, after: b.previousElementSibling && b.previousElementSibling.id }; });
+  ck("a Paste button right after the WalletConnect link field", btn.text === "Incolla" && btn.after === "wcUri", JSON.stringify(btn));
+
+  const paste = async (text) => {
+    await p.evaluate((t) => navigator.clipboard.writeText(t), text);
+    await p.evaluate(() => { document.getElementById("wcUri").value = ""; });
+    await p.click("#wcPaste");
+    await p.waitForTimeout(200);
+    return p.$eval("#wcUri", (e) => e.value);
+  };
+  const LINK = "wc:7f6e5d4c@2?relay-protocol=irn&symKey=0123abcd&expiryTimestamp=1700000000";
+  ck("Paste: a plain wc: link, with all its parameters", (await paste(LINK)) === LINK);
+  ck("Paste: the link found inside a sentence", (await paste("Connect with this link: " + LINK + " (expires soon)")) === LINK);
+  ck("Paste: a link encoded inside another link (…?uri=wc%3A…)", (await paste("https://example.app/wc?uri=" + encodeURIComponent(LINK))) === LINK);
+  const before = errs.length;
+  ck("Paste without a link: the field stays empty and the user is told", (await paste("hello")) === "" && errs.length === before + 1 && /wc:/.test(errs[errs.length - 1]), errs.slice(before).join("\n"));
+  errs.length = before;
+
+  await p.selectOption("#network", "polygon");
+  await p.fill("#upAddress", UP);
+  await p.reload();
+  await p.waitForFunction(() => document.getElementById("wcPaste"));
+  const kept = await p.evaluate(() => ({ up: document.getElementById("upAddress").value, net: document.getElementById("network").value }));
+  ck("UP address and network remembered at the next start", kept.up === UP && kept.net === "polygon", JSON.stringify(kept));
+  await p.fill("#upAddress", "0x123");
+  await p.reload();
+  await p.waitForFunction(() => document.getElementById("wcPaste"));
+  ck("an incomplete address is not remembered (the last valid one stays)", (await p.$eval("#upAddress", (e) => e.value)) === UP);
+
+  const html = fs.readFileSync(path.join(WWW, "up-wallet.html"), "utf8");
+  ck("WalletConnect metadata: dApps are shown the site and its icon, not https://localhost",
+    html.includes('url: "https://crosschain-lukso.chainintegrate.it",') && html.includes('icons: ["https://crosschain-lukso.chainintegrate.it/favicon.ico"]') && !/url: location\.origin/.test(html));
+  ck("the WalletConnect Project ID is in the app's config", /walletConnectProjectId": "[0-9a-f]{32}"/.test(fs.readFileSync(path.join(WWW, "config.js"), "utf8")));
+  ck("no page errors", !errs.length, errs.join("\n"));
+
+  await b.close();
+  console.log(res.join("\n"));
+  console.log(`${res.filter((r) => r.startsWith("PASS")).length}/${res.length}`);
+  process.exit(res.every((r) => r.startsWith("PASS")) ? 0 : 1);
+})().catch((e) => { console.log(res.join("\n")); console.error(e); process.exit(1); });

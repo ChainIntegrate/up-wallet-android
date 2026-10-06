@@ -51,6 +51,13 @@ async function page(b, bundle) {
   }));
   ck("announced through EIP-6963 as \"MetaMask (app)\", the only wallet", seen.length === 1 && seen[0] === "MetaMask (app)", JSON.stringify(seen));
   ck("nothing is started before the page asks for the wallet", await p.evaluate(() => !window.__mm));
+  // A connection kept from an older version, approved for Ethereum only (the "connection not found" case).
+  await p.evaluate(() => new Promise((ok) => {
+    localStorage.setItem("upwallet.metamask.chains", JSON.stringify(["0x1"]));
+    const r = indexedDB.open("mmconnect-kv-store", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => { r.result.close(); ok(); };
+  }));
   await p.selectOption("#network", "base");
   await p.fill("#upAddress", "0x4a2605796e0d91A9667d6E30365aEEC384C48c27");
   await p.click("#connectSigner");
@@ -62,6 +69,9 @@ async function page(b, bundle) {
   ck("after connecting, the page reads the chosen network from the wallet (not Ethereum)", mm.calls.includes("eth_chainId"), JSON.stringify(mm.calls));
   ck("the page then follows account and network changes (listeners reach the client)", mm.events.includes("accountsChanged") && mm.events.includes("chainChanged"), JSON.stringify(mm.events));
   ck("one client for the whole session", mm.created === 1, mm.created);
+  const store = await p.evaluate(async () => ({ dbs: (await indexedDB.databases()).map((d) => d.name), chains: JSON.parse(localStorage.getItem("upwallet.metamask.chains")) }));
+  ck("a connection kept for fewer networks is dropped before connecting; the new networks are recorded",
+    !store.dbs.includes("mmconnect-kv-store") && ["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"].every((c) => store.chains.includes(c)), JSON.stringify(store));
   ck("analytics off; MetaMask opened by metamask:// links through the app", mm.opt.analytics && mm.opt.analytics.enabled === false && mm.opt.mobile.useDeeplink === true && mm.opt.mobile.open === "function", JSON.stringify(mm.opt));
   const nets = mm.opt.api.supportedNetworks;
   ck("networks from chains.js with their RPC (Base, Polygon, Arbitrum, Avalanche, Arc)",

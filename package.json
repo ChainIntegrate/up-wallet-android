@@ -6,11 +6,12 @@
   "scripts": {
     "web": "node scripts/build-web.js",
     "sync": "npm run web && npx cap sync android",
-    "test": "node test/mobile-layout.js && node test/metamask.js"
+    "test": "node test/mobile-layout.js && node test/metamask.js && node test/native.js"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",
     "@capacitor/app-launcher": "8.0.1",
+    "@capacitor/clipboard": "8.0.1",
     "@capacitor/core": "8.5.2",
     "@metamask/connect-evm": "2.1.1"
   },
