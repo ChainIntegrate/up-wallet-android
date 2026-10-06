@@ -103,6 +103,16 @@ async function page(b, bundle) {
   const logged = await p.$$eval("#log .line-dim", (els) => els.map((e) => e.textContent).join("\n"));
   ck("each opening of MetaMask is noted in the page's log, and so is a skipped repeat",
     (logged.match(/Apertura di MetaMask \(richiesta\)/g) || []).length === 2 && /già aperto, non riaperto/.test(logged), logged);
+  const back = await p.evaluate(async () => {
+    let focus = 0; window.addEventListener("focus", () => { focus++; });
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+    document.dispatchEvent(new Event("visibilitychange"));   // a second one right after: not repeated
+    await new Promise((r) => setTimeout(r, 50));
+    const log = [...document.querySelectorAll("#log .line-dim")].map((e) => e.textContent).filter((t) => /Ritorno nell'app/.test(t));
+    return { focus, log: log.length };
+  });
+  ck("back in the app: the MetaMask connection is renewed once (focus event for MetaMask Connect) and noted in the log", back.focus === 1 && back.log === 1, JSON.stringify(back));
   ck("no page errors (with the test double)", !errs.length, errs.join("\n"));
   await p.close();
 
@@ -119,6 +129,9 @@ async function page(b, bundle) {
   const m = bundle.match(/requestTimeout:(\w+),connectionTimeout/);
   ck("each MetaMask request may take up to 5 minutes (MetaMask Connect's default is 60 s)",
     m && new RegExp("[,;{(\\s]" + m[1].replace("$", "\\$") + "=300\\*1e3[,;]").test(bundle), m && m[0]);
+
+  ck("MetaMask Connect renews its relay connection on every focus, not only when it believes it is disconnected",
+    /onWindowFocus\(\)\{this\.dappClient\.reconnect\(\)\.catch\(/.test(bundle) && !/onWindowFocus\(\)\{this\.isConnected\(\)\|\|/.test(bundle));
 
   await b.close();
   console.log(res.join("\n"));

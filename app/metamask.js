@@ -7,6 +7,7 @@
 import { createEVMClient } from "@metamask/connect-evm";
 import { AppLauncher } from "@capacitor/app-launcher";
 import { Capacitor } from "@capacitor/core";
+import { App } from "@capacitor/app";
 
 const INFO = Object.freeze({
   uuid: "6f1c2c8e-5b1a-4d43-9a43-2c0d6b9e7a51",
@@ -145,6 +146,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const filter = document.getElementById("networkFilter");
   if (filter) filter.addEventListener("input", () => setTimeout(follow, 0));   // the filter changes the choice too
 });
+
+// Back in UP Wallet (from MetaMask, or anywhere else): renew the connection to MetaMask's relay, so an
+// answer sent while the app was suspended is read (the build makes the focus handler renew it).
+let lastRenew = 0;
+function cameBack() {
+  if (!client || Date.now() - lastRenew < 2000) return;
+  lastRenew = Date.now();
+  note(document.documentElement.lang === "en" ? "Back in the app: MetaMask connection renewed." : "Ritorno nell'app: collegamento con MetaMask rinnovato.");
+  window.dispatchEvent(new Event("focus"));
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") cameBack(); });
+if (Capacitor.isNativePlatform()) App.addListener("resume", cameBack).catch(() => null);
 
 const announce = () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: Object.freeze({ info: INFO, provider }) }));
 window.addEventListener("eip6963:requestProvider", announce);

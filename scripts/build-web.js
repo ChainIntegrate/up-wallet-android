@@ -90,21 +90,34 @@ async function main() {
   fs.writeFileSync(path.join(OUT, "app", "app-shim.js"),
     fs.readFileSync(path.join(ROOT, "app", "app-shim.js"), "utf8").replace("__SITE__", site).replace("__PAGE__", PAGE));
   fs.copyFileSync(path.join(ROOT, "app", "app.css"), path.join(OUT, "app", "app.css"));
-  // MetaMask Connect gives each request 60 s to come back. On a phone the user goes to MetaMask, reads,
-  // confirms and comes back: that often takes longer ("Transport request timed out"). 5 minutes here.
-  const TIMEOUT_FROM = "DEFAULT_REQUEST_TIMEOUT2 = 60 * 1e3;", TIMEOUT_TO = "DEFAULT_REQUEST_TIMEOUT2 = 5 * 60 * 1e3;";
-  const mmTimeout = {
-    name: "metamask-request-timeout",
+  // Two changes to MetaMask Connect (connect-multichain), each required to match exactly once:
+  // - each request may take 5 minutes instead of 60 s: on a phone the user goes to MetaMask, reads,
+  //   confirms and comes back ("Transport request timed out");
+  // - when the window gets focus, the connection to MetaMask's relay is renewed even if it looks open.
+  //   While UP Wallet is in the background Android suspends it and the socket goes stale; the answer
+  //   MetaMask sent meanwhile was never read (the request then timed out). Renewing resubscribes and
+  //   reads the channel's history, as the protocol's own docs recommend for mobile clients returning
+  //   to the foreground. app/metamask.js turns "the app came back" into a focus event.
+  const MM_PATCHES = [
+    ["DEFAULT_REQUEST_TIMEOUT2 = 60 * 1e3;", "DEFAULT_REQUEST_TIMEOUT2 = 5 * 60 * 1e3;"],
+    ["onWindowFocus() {\n        if (!this.isConnected()) {\n          this.dappClient.reconnect();\n        }\n      }",
+     "onWindowFocus() {\n        this.dappClient.reconnect().catch(() => {});\n      }"],
+  ];
+  const mmPatch = {
+    name: "metamask-connect-patches",
     setup(b) {
       b.onLoad({ filter: /connect-multichain[\\/]dist[\\/]browser[\\/]es[\\/]connect-multichain\.mjs$/ }, (args) => {
-        const src = fs.readFileSync(args.path, "utf8");
-        if (!src.includes(TIMEOUT_FROM)) throw new Error("MetaMask Connect request timeout not found: check the new version");
-        return { contents: src.replace(TIMEOUT_FROM, TIMEOUT_TO), loader: "js" };
+        let src = fs.readFileSync(args.path, "utf8");
+        for (const [from, to] of MM_PATCHES) {
+          if (src.split(from).length !== 2) throw new Error("MetaMask Connect patch does not apply (check the new version): " + from.slice(0, 60));
+          src = src.replace(from, to);
+        }
+        return { contents: src, loader: "js" };
       });
     },
   };
   for (const name of ["metamask.js", "native.js"]) await require("esbuild").build({
-    plugins: [mmTimeout],
+    plugins: [mmPatch],
     entryPoints: [path.join(ROOT, "app", name)], outfile: path.join(OUT, "app", name),
     bundle: true, format: "iife", platform: "browser", target: "es2020", minify: true, legalComments: "none", logLevel: "warning",
     define: { "process.env.NODE_ENV": '"production"', global: "globalThis" },
