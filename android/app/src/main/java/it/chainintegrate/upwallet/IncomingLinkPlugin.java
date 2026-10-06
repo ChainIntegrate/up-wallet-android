@@ -1,6 +1,8 @@
 package it.chainintegrate.upwallet;
 
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 
 import com.getcapacitor.JSObject;
@@ -37,6 +39,31 @@ public class IncomingLinkPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("text", pending);
         pending = null;
+        call.resolve(ret);
+    }
+
+    /**
+     * Back to the dApp: brings the default browser's task to the front, on the tab it was showing (its
+     * launch intent resumes the existing task, it does not open a new tab). ok=false when there is no
+     * default browser (no choice made, or none installed): the page then just moves to the background.
+     */
+    @PluginMethod
+    public void backToBrowser(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"));
+            ResolveInfo ri = pm.resolveActivity(view, PackageManager.MATCH_DEFAULT_ONLY);
+            String pkg = ri != null && ri.activityInfo != null ? ri.activityInfo.packageName : null;
+            Intent launch = pkg != null && !"android".equals(pkg) ? pm.getLaunchIntentForPackage(pkg) : null;
+            if (launch == null) { ret.put("ok", false); call.resolve(ret); return; }
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getActivity().startActivity(launch);
+            ret.put("ok", true);
+            ret.put("browser", pkg);
+        } catch (Exception e) {
+            ret.put("ok", false);
+        }
         call.resolve(ret);
     }
 

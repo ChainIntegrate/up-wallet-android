@@ -9,7 +9,8 @@
 // - A request from a dApp that arrives while UP Wallet is in the background shows a notification: a tap
 //   brings UP Wallet to the front (Android does not let an app bring itself to the front).
 // - Once the dApp has its answer (signature sent, operation done, simulation, rejection, session
-//   active), a "Back to the dApp" button puts UP Wallet in the background, back to the browser.
+//   active), a "Back to the dApp" button brings the default browser back to the front, on the tab it
+//   was showing (or, without a default browser, puts UP Wallet in the background).
 // Bundled by scripts/build-web.js (esbuild) into www/app/native.js.
 import { Clipboard } from "@capacitor/clipboard";
 import { Capacitor, CapacitorHttp, registerPlugin } from "@capacitor/core";
@@ -169,7 +170,12 @@ function addBackButton() {
     showBack(false);
     diag(en() ? "Back to the dApp." : "Torna alla dApp.");
     if (window.__upwalletMinimize) return window.__upwalletMinimize();   // tests
-    if (native()) App.minimizeApp().catch(() => null);
+    if (!native()) return;
+    // The browser's own task, on the tab it was showing; without a default browser, just the background.
+    IncomingLink.backToBrowser().then((r) => {
+      diag(r && r.ok ? `→ ${r.browser}` : "→ background");
+      if (!r || !r.ok) return App.minimizeApp();
+    }).catch(() => App.minimizeApp().catch(() => null));
   });
   document.body.appendChild(backBtn);
 }
