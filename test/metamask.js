@@ -21,6 +21,13 @@ async function page(b, bundle) {
   p.on("pageerror", (e) => errs.push(e.message));
   await p.route("**/*", (r) => {
     const u = new URL(r.request().url());
+    // RPCs of Base and Polygon: they answer their chain id; the UP has no code (the check stops after the wallet).
+    const RPC = { "base-rpc.publicnode.com": "0x2105", "polygon.drpc.org": "0x89" };
+    if (RPC[u.host]) {
+      const q = JSON.parse(r.request().postData() || "{}");
+      const one = (x) => ({ jsonrpc: "2.0", id: x.id, result: x.method === "eth_chainId" ? RPC[u.host] : "0x" });
+      return r.fulfill({ contentType: "application/json", body: JSON.stringify(Array.isArray(q) ? q.map(one) : one(q)) });
+    }
     if (u.host !== "localhost") return r.abort();
     if (bundle && u.pathname === "/app/metamask.js") return r.fulfill({ body: Buffer.from(bundle), contentType: "application/javascript" });
     const f = path.join(WWW, decodeURIComponent(u.pathname === "/" ? "/index.html" : u.pathname));
@@ -44,11 +51,15 @@ async function page(b, bundle) {
   }));
   ck("announced through EIP-6963 as \"MetaMask (app)\", the only wallet", seen.length === 1 && seen[0] === "MetaMask (app)", JSON.stringify(seen));
   ck("nothing is started before the page asks for the wallet", await p.evaluate(() => !window.__mm));
+  await p.selectOption("#network", "base");
+  await p.fill("#upAddress", "0x4a2605796e0d91A9667d6E30365aEEC384C48c27");
   await p.click("#connectSigner");
-  await p.waitForFunction(() => window.__mm && window.__mm.calls.includes("eth_requestAccounts"));
-  await p.waitForTimeout(300);
-  const mm = await p.evaluate(() => ({ calls: window.__mm.calls, created: window.__mm.created, opt: { ...window.__mm.options, mobile: { useDeeplink: window.__mm.options.mobile.useDeeplink, open: typeof window.__mm.options.mobile.preferredOpenLink } }, events: Object.keys(window.__mm.handlers) }));
-  ck("Connect MetaMask: the page's request reaches MetaMask Connect (eth_requestAccounts)", mm.calls[0] === "eth_requestAccounts", JSON.stringify(mm.calls));
+  await p.waitForFunction(() => window.__mm && window.__mm.connects && window.__mm.connects.length);
+  await p.waitForFunction(() => /chainId 8453/.test(document.getElementById("complianceBox").textContent) && /0x406f/i.test(document.getElementById("complianceBox").textContent), null, { timeout: 5000 }).catch(() => null);
+  const mm = await p.evaluate(() => ({ connects: window.__mm.connects, switches: window.__mm.switches, calls: window.__mm.calls, created: window.__mm.created, opt: { ...window.__mm.options, mobile: { useDeeplink: window.__mm.options.mobile.useDeeplink, open: typeof window.__mm.options.mobile.preferredOpenLink } }, events: Object.keys(window.__mm.handlers) }));
+  ck("Connect MetaMask: one connection, for the network chosen in the page first (Base), then the main ones",
+    mm.connects.length === 1 && mm.connects[0][0] === "0x2105" && ["0x89", "0xa4b1", "0xa86a", "0x1"].every((c) => mm.connects[0].includes(c)), JSON.stringify(mm.connects));
+  ck("after connecting, the page reads the chosen network from the wallet (not Ethereum)", mm.calls.includes("eth_chainId"), JSON.stringify(mm.calls));
   ck("the page then follows account and network changes (listeners reach the client)", mm.events.includes("accountsChanged") && mm.events.includes("chainChanged"), JSON.stringify(mm.events));
   ck("one client for the whole session", mm.created === 1, mm.created);
   ck("analytics off; MetaMask opened by metamask:// links through the app", mm.opt.analytics && mm.opt.analytics.enabled === false && mm.opt.mobile.useDeeplink === true && mm.opt.mobile.open === "function", JSON.stringify(mm.opt));
@@ -58,6 +69,12 @@ async function page(b, bundle) {
   ck("the dApp name MetaMask shows is the app's", mm.opt.dapp.name === "UP Wallet (ChainIntegrate)", JSON.stringify(mm.opt.dapp));
   const status = await p.$eval("#complianceBox", (e) => e.textContent);
   ck("the page does not say that no wallet was found", !/non trovato|not found/i.test(status), status);
+  ck("the page's check: wallet on Base, no \"switch network in MetaMask\" error", /✅ 0x406f822aC86b61d4cDf4cD84833f7e5561609C02 · chainId 8453/.test(status) && !/passa a chainId|switch to chainId/i.test(status), status);
+  await p.selectOption("#network", "polygon");
+  await p.waitForFunction(() => /chainId 137/.test(document.getElementById("complianceBox").textContent), null, { timeout: 5000 }).catch(() => null);
+  const after = await p.evaluate(() => ({ switches: window.__mm.switches, status: document.getElementById("complianceBox").textContent }));
+  ck("choosing Polygon in the page moves the MetaMask connection to Polygon", after.switches[after.switches.length - 1] === "0x89", JSON.stringify(after.switches));
+  ck("and the page's check sees the wallet on Polygon, no mismatch", /✅ 0x406f822aC86b61d4cDf4cD84833f7e5561609C02 · chainId 137/.test(after.status) && !/passa a chainId|switch to chainId/i.test(after.status), after.status);
   const sig = await p.evaluate(async () => {
     const got = [];
     window.addEventListener("eip6963:announceProvider", (e) => got.push(e.detail.provider));

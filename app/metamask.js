@@ -24,6 +24,15 @@ function supportedNetworks() {
   return out;
 }
 
+// The network chosen in the page (panel 1), as a hex chain id, or null.
+function selectedChain() {
+  const el = document.getElementById("network");
+  const c = el && typeof CHAINS !== "undefined" ? CHAINS.find((x) => x.key === el.value) : null;
+  return c && c.chainId ? "0x" + c.chainId.toString(16) : null;
+}
+// Networks asked for at connection, besides the chosen one: changing among them needs no new approval.
+const MAIN_CHAINS = ["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"];   // Base, Polygon, Arbitrum, Avalanche, Ethereum
+
 // MetaMask is opened through Android (an intent), not by navigating the app's web view.
 function openLink(url) {
   if (!Capacitor.isNativePlatform()) { window.location.href = url; return; }
@@ -57,10 +66,28 @@ function start() {
   return starting;
 }
 
+let connected = false;
+
+// With MetaMask Connect the network is chosen by the app, not in MetaMask: the connection is made
+// for the chosen network (plus the main ones), and it follows the network chosen in the page.
+async function follow() {
+  const id = selectedChain();
+  if (!client || !connected || !id) return;
+  try { await client.switchChain({ chainId: id }); } catch (e) { console.error("Network change refused", e); }
+}
+
 const provider = {
   isUpWalletApp: true,
   async request(args) {
     const c = client || await start();
+    if (args && (args.method === "eth_requestAccounts" || args.method === "wallet_requestPermissions")) {
+      const id = selectedChain();
+      const chainIds = [...new Set([id, ...MAIN_CHAINS].filter(Boolean))];
+      const r = await c.connect({ chainIds });
+      connected = true;
+      await follow();
+      return args.method === "eth_requestAccounts" ? r.accounts : c.getProvider().request(args);
+    }
     return c.getProvider().request(args);
   },
   on(ev, fn) {
@@ -73,6 +100,13 @@ const provider = {
     return provider;
   },
 };
+
+document.addEventListener("DOMContentLoaded", () => {
+  const el = document.getElementById("network");
+  if (el) el.addEventListener("change", follow);
+  const filter = document.getElementById("networkFilter");
+  if (filter) filter.addEventListener("input", () => setTimeout(follow, 0));   // the filter changes the choice too
+});
 
 const announce = () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: Object.freeze({ info: INFO, provider }) }));
 window.addEventListener("eip6963:requestProvider", announce);
