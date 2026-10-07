@@ -113,6 +113,16 @@ Prototype parts to decide on before a release:
 ## Before the repository or the app goes public
 
 - Optionally a separate Reown project for the app (own quota and statistics).
-- Release signing key outside the repository (`prototype.keystore` is for this prototype only).
+- **Signing key (blocks a public repository)**: `prototype.keystore` and its password are in the
+  repository and in all its history. Anyone could sign an APK that Android accepts as an update of this
+  app. Before going public: a release key kept outside the repository (GitHub secrets for CI), the
+  prototype key removed, and the history restarted from one clean commit. Installed copies must be
+  uninstalled once (the signature changes; app data is reset).
+- **Licenses (blocks a public repository)**: no LICENSE file yet (MIT, as Cross_Chain). MetaMask Connect
+  (`@metamask/connect-evm`, `@metamask/connect-multichain`) is under ConsenSys' own license:
+  non-commercial use or up to 10,000 monthly active users, with a prominent notice in each copy that
+  the program uses it and that it is ConsenSys' copyright, and the same terms for the resulting
+  program. The APK bundles it (and the build patches it): a THIRD_PARTY_NOTICES file and the notice
+  inside the app are needed; beyond those terms, a license from ConsenSys or another library.
 - Privacy policy page (on the site) for the Play Store listing.
 - Remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests).
