@@ -159,11 +159,16 @@ const provider = {
   },
 };
 
+// A network picked from the list goes to MetaMask at once. Typing or deleting in the network filter
+// changes the choice at each letter, and a network outside the approved ones opens MetaMask to ask for
+// it (seen in the tests: 0G and ApeChain while deleting "bas"): from the filter, the network goes to
+// MetaMask once the choice has stayed the same for 1.5 s.
+let followTimer = null;
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("network");
-  if (el) el.addEventListener("change", follow);
+  if (el) el.addEventListener("change", () => { clearTimeout(followTimer); follow(); });
   const filter = document.getElementById("networkFilter");
-  if (filter) filter.addEventListener("input", () => setTimeout(follow, 0));   // the filter changes the choice too
+  if (filter) filter.addEventListener("input", () => { clearTimeout(followTimer); followTimer = setTimeout(follow, 1500); });
 });
 
 // Back in UP Wallet (from MetaMask, or anywhere else): renew the connection to MetaMask's relay, so an

@@ -85,6 +85,14 @@ async function page(b, bundle) {
   const after = await p.evaluate(() => ({ switches: window.__mm.switches, status: document.getElementById("complianceBox").textContent }));
   ck("choosing Polygon in the page moves the MetaMask connection to Polygon", after.switches[after.switches.length - 1] === "0x89", JSON.stringify(after.switches));
   ck("and the page's check sees the wallet on Polygon, no mismatch", /✅ 0x406f822aC86b61d4cDf4cD84833f7e5561609C02 · chainId 137/.test(after.status) && !/passa a chainId|switch to chainId/i.test(after.status), after.status);
+  // Deleting the filter letter by letter goes through other networks: only the last one reaches MetaMask.
+  const before = await p.evaluate(() => window.__mm.switches.length);
+  await p.fill("#networkFilter", "bas"); await p.waitForTimeout(200);
+  for (const v of ["ba", "b", ""]) { await p.fill("#networkFilter", v); await p.waitForTimeout(200); }
+  await p.waitForTimeout(2000);
+  const sw = await p.evaluate((n) => window.__mm.switches.slice(n), before);
+  const finalId = await p.evaluate(() => { const c = CHAINS.find((x) => x.key === document.getElementById("network").value); return "0x" + c.chainId.toString(16); });
+  ck("typing or deleting in the network filter: only the network finally chosen reaches MetaMask (after 1.5 s)", JSON.stringify(sw) === JSON.stringify([finalId]), JSON.stringify(sw) + " final " + finalId);
   const sig = await p.evaluate(async () => {
     const got = [];
     window.addEventListener("eip6963:announceProvider", (e) => got.push(e.detail.provider));
