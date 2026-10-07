@@ -72,9 +72,12 @@ will be signed with a different key that never enters the repository.
 ## Still to do
 
 Open from the phone tests:
-- **Long background test of the keep-alive service** (build `066f1cb`): connect a dApp, leave UP
-  Wallet in the background 10+ minutes, then act on the dApp; the request notification must arrive.
-  Before the service, after ~7 minutes Android had frozen the app and the request waited for the user.
+- **Long background test**: connect a dApp, leave UP Wallet in the background 10+ minutes, then act on
+  the dApp; the request notification must arrive. Without the keep-alive service the app was frozen
+  after ~7 minutes; with it (build `066f1cb`), still after ~8 minutes: the WebView's renderer is a
+  separate process whose priority drops when the app is not visible. Build `66efc76`+1 keeps the
+  renderer important in the background (`setRendererPriorityPolicy`); to be tested. Also suggest
+  Battery usage "Unrestricted" for UP Wallet in Android's app settings.
 - **Way back from MetaMask**: after confirming, the user returns to UP Wallet by hand (MetaMask does
   not return to the calling app). Look for a MetaMask Connect option or a return link, if any.
 - **MetaMask cancels open requests when it locks** (auto-lock shorter than the time to read and
