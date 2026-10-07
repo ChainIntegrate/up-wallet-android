@@ -45,6 +45,7 @@ requests that arrive in the background and goes back to the browser. See "Still 
   project's allowed domains include `upwallet.chainintegrate.it`, the app's origin).
 - The app's origin is `https://upwallet.chainintegrate.it` (`server.hostname` in `capacitor.config.json`):
   a name we own, served by the app itself (no DNS record needed), so the Reown allowlist names only us.
+  `localhost` is no longer in the allowlist: older builds (origin `https://localhost`) cannot connect to dApps.
 - A MetaMask connection resumed from storage may bring back the network used before; before each request
   the connection is put back on the page's network when that network is approved (a local change).
 
@@ -111,8 +112,6 @@ Prototype parts to decide on before a release:
 
 ## Before the repository or the app goes public
 
-- **Reown allowlist**: once the app with origin `upwallet.chainintegrate.it` is tested, remove
-  `localhost` from the allowed domains of the Reown project.
 - Optionally a separate Reown project for the app (own quota and statistics).
 - Release signing key outside the repository (`prototype.keystore` is for this prototype only).
 - Privacy policy page (on the site) for the Play Store listing.
