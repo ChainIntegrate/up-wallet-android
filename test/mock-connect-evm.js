@@ -15,9 +15,18 @@ export async function createEVMClient(options) {
     removeListener() {},
   };
   window.__mm.connects = []; window.__mm.switches = [];
+  const changed = (id) => { chain = id; (handlers.chainChanged || []).forEach((f) => f(id)); };
   return {
     getProvider: () => provider,
-    async connect({ chainIds }) { window.__mm.connects.push(chainIds); chain = chainIds[0]; return { accounts: ["0x406f822aC86b61d4cDf4cD84833f7e5561609C02"], chainId: chain }; },
-    async switchChain({ chainId }) { window.__mm.switches.push(chainId); if (chainId !== chain) { chain = chainId; (handlers.chainChanged || []).forEach((f) => f(chainId)); } },
+    get selectedChainId() { return chain; },
+    // window.__mmLateChain: like MetaMask Connect resuming a stored connection, a late session message
+    // brings back the network remembered from before, right after connect() has answered.
+    async connect({ chainIds }) {
+      window.__mm.connects.push(chainIds); chain = chainIds[0];
+      if (window.__mmLateChain) setTimeout(() => changed(window.__mmLateChain), 0);
+      return { accounts: ["0x406f822aC86b61d4cDf4cD84833f7e5561609C02"], chainId: chain };
+    },
+    // Like MetaMask Connect: nothing to do when already on that network.
+    async switchChain({ chainId }) { window.__mm.switches.push(chainId); if (chainId !== chain) changed(chainId); },
   };
 }

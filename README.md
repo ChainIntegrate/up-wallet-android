@@ -42,7 +42,11 @@ requests that arrive in the background and goes back to the browser. See "Still 
 - ethers is bundled from the npm package, checked against the page's own SRI hash; nothing is loaded
   from a CDN.
 - `config.js` is generated from `app-config.json` (WalletConnect Project ID; on cloud.reown.com the
-  project's allowed domains include `localhost`, the app's origin).
+  project's allowed domains include `upwallet.chainintegrate.it`, the app's origin).
+- The app's origin is `https://upwallet.chainintegrate.it` (`server.hostname` in `capacitor.config.json`):
+  a name we own, served by the app itself (no DNS record needed), so the Reown allowlist names only us.
+- A MetaMask connection resumed from storage may bring back the network used before; before each request
+  the connection is put back on the page's network when that network is approved (a local change).
 
 The app holds no keys: signing stays in MetaMask. Backups of app data are off (`allowBackup="false"`).
 
@@ -107,11 +111,8 @@ Prototype parts to decide on before a release:
 
 ## Before the repository or the app goes public
 
-- **App origin and Reown allowlist**: the app runs as `https://localhost` (Capacitor's default), and
-  `localhost` is in the allowed domains of the Reown project, so any page served on localhost may use
-  that Project ID. Set `server.hostname` in `capacitor.config.json` to a subdomain we own (e.g.
-  `upwallet.chainintegrate.it`; no DNS record needed), then on cloud.reown.com add it and remove
-  `localhost`. App data (remembered UP and network, MetaMask connection) is reset once by the change.
+- **Reown allowlist**: once the app with origin `upwallet.chainintegrate.it` is tested, remove
+  `localhost` from the allowed domains of the Reown project.
 - Optionally a separate Reown project for the app (own quota and statistics).
 - Release signing key outside the repository (`prototype.keystore` is for this prototype only).
 - Privacy policy page (on the site) for the Play Store listing.

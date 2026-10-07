@@ -118,6 +118,18 @@ async function follow() {
   try { await client.switchChain({ chainId: id }); } catch (e) { console.error("Network change refused", e); }
 }
 
+// MetaMask Connect remembers the last network used and may bring it back after connecting (when a stored
+// connection is resumed, a late session message picks the remembered network, e.g. Polygon, over the one
+// just asked for); the page then saw the wallet on another network. Before each request the connection is
+// put back on the page's network, if it is one of the approved ones: that change is local and opens
+// nothing. Other networks are asked of MetaMask only by follow() (a network chosen in the page).
+async function keepChain(c) {
+  const id = selectedChain();
+  if (!connected || !id || c.selectedChainId === id || !approvedChains().includes(id)) return;
+  diag(`MetaMask: network ${c.selectedChainId} → ${id}`);
+  try { await c.switchChain({ chainId: id }); } catch (e) { console.error("Network change refused", e); }
+}
+
 async function requestInner(args) {
   const c = client || await start();
   if (args && (args.method === "eth_requestAccounts" || args.method === "wallet_requestPermissions")) {
@@ -128,6 +140,7 @@ async function requestInner(args) {
     await follow();
     return args.method === "eth_requestAccounts" ? r.accounts : c.getProvider().request(args);
   }
+  if (!/^eth_accounts$/.test(args && args.method)) await keepChain(c);
   return c.getProvider().request(args);
 }
 

@@ -4,7 +4,7 @@
 //   link is put in the field, ready; connecting still takes the user's tap on the page's button.
 // - The UP address and the network are remembered on this phone and filled in at the next start.
 // - Calls to the site's relay service go through Android's HTTP stack (CapacitorHttp), not the web
-//   view's fetch: the app's origin (https://localhost) is not the site's, and the browser's cross-origin
+//   view's fetch: the app's origin (https://upwallet.chainintegrate.it) is not the site's, and the browser's cross-origin
 //   rules would block them. The relay checks UP, controller, limits and paymaster as for the site.
 // - A request from a dApp that arrives while UP Wallet is in the background shows a notification: a tap
 //   brings UP Wallet to the front (Android does not let an app bring itself to the front).

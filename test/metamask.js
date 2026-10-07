@@ -126,6 +126,27 @@ async function page(b, bundle) {
   ck("no page errors (with the test double)", !errs.length, errs.join("\n"));
   await p.close();
 
+  // A second connection: MetaMask Connect resumes the stored one and brings back the network used before
+  // (Polygon) right after connecting for Base. The page must still see the wallet on Base.
+  ({ p, errs } = await page(b, mockBundle));
+  await p.evaluate(() => {
+    localStorage.setItem("upwallet.metamask.chains", JSON.stringify(["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"]));
+    window.__mmLateChain = "0x89";
+  });
+  await p.selectOption("#network", "base");
+  await p.fill("#upAddress", "0x4a2605796e0d91A9667d6E30365aEEC384C48c27");
+  await p.click("#connectSigner");
+  await p.waitForFunction(() => /chainId (8453|137)/.test(document.getElementById("complianceBox").textContent) && /0x406f/i.test(document.getElementById("complianceBox").textContent), null, { timeout: 5000 }).catch(() => null);
+  await p.waitForTimeout(500);
+  const second = await p.evaluate(() => ({ status: document.getElementById("complianceBox").textContent, switches: window.__mm.switches,
+    diag: JSON.parse(localStorage.getItem("upwallet.diag") || "[]").filter((l) => /network/.test(l)).join("\n") }));
+  ck("a resumed connection that brings back another network: put back on the page's network, no mismatch",
+    /✅ 0x406f822aC86b61d4cDf4cD84833f7e5561609C02 · chainId 8453/.test(second.status) && !/passa a chainId|switch to chainId/i.test(second.status), second.status);
+  ck("that correction is noted in the diagnostic log, without opening MetaMask",
+    /MetaMask: network 0x89 → 0x2105/.test(second.diag) && !(await p.$$eval("#log .line-dim", (els) => els.some((e) => /Apertura di MetaMask/.test(e.textContent)))), second.diag + JSON.stringify(second.switches));
+  ck("no page errors (resumed connection)", !errs.length, errs.join("\n"));
+  await p.close();
+
   ({ p, errs } = await page(b, null));
   const real = await p.evaluate(() => new Promise((ok) => {
     const got = [];

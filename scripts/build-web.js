@@ -6,7 +6,7 @@
 //   - app/app-shim.js and app/app.css are loaded by the page (links and relay calls to the site, phone layout);
 //   - app/metamask.js, bundled with esbuild, gives the page MetaMask mobile as its signing wallet;
 //   - app/native.js, bundled too: paste button, wc: links received from other apps, remembered UP and network;
-//   - the WalletConnect metadata names the site instead of the app's origin (https://localhost).
+//   - the WalletConnect metadata names the site instead of the app's origin (https://upwallet.chainintegrate.it).
 //
 //   node scripts/build-web.js                    clones Cross_Chain at the pinned commit into upstream/
 //   CROSS_CHAIN_DIR=/path node scripts/build-web.js   uses a local checkout instead (it must be at that commit)
@@ -79,7 +79,7 @@ async function main() {
   const cfg = '<script src="config.js"></script>';
   if (!html.includes(cfg)) throw new Error("config.js script tag not found in the page");
   html = html.replace(cfg, `${cfg}\n<script src="app/metamask.js"></script>\n<script src="app/native.js"></script>`);
-  // WalletConnect metadata: the page names its own origin, which in the app is https://localhost.
+  // WalletConnect metadata: the page names its own origin, which in the app is https://upwallet.chainintegrate.it.
   // dApps are shown the site instead (its address and icon).
   const META = "      url: location.origin,\n      icons: [location.origin + \"/favicon.ico\"],";
   if (!html.includes(META)) throw new Error("WalletConnect metadata (url, icons) not found in the page");
