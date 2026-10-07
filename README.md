@@ -4,9 +4,10 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **phase 4**. The app installs, shows the page, uses MetaMask mobile to sign, connects to
-dApps through WalletConnect links (pasted, opened with the app or shared to it) and can have the
-site relayer pay the gas.
+Status: **prototype, phases 1-4 done** and tested on an Android phone with OpenSea on Base: the app
+installs, shows the page, uses MetaMask mobile to sign, connects to dApps through WalletConnect links
+(pasted, opened with the app or shared to it), has the site relayer pay the gas, notifies dApp
+requests that arrive in the background and goes back to the browser. See "Still to do" below.
 
 ## What the app adds to the page
 
@@ -67,6 +68,39 @@ To take a newer version of the page, change the commit in `UPSTREAM.json`.
 APKs are signed with `android/app/prototype.keystore`, a key kept in the repository on purpose so
 that each new APK installs over the previous one. It is for this prototype only: a Play Store release
 will be signed with a different key that never enters the repository.
+
+## Still to do
+
+Open from the phone tests:
+- **Long background test of the keep-alive service** (build `066f1cb`): connect a dApp, leave UP
+  Wallet in the background 10+ minutes, then act on the dApp; the request notification must arrive.
+  Before the service, after ~7 minutes Android had frozen the app and the request waited for the user.
+- **Way back from MetaMask**: after confirming, the user returns to UP Wallet by hand (MetaMask does
+  not return to the calling app). Look for a MetaMask Connect option or a return link, if any.
+- **MetaMask cancels open requests when it locks** (auto-lock shorter than the time to read and
+  confirm, 30 s in the tests): the page shows "User rejected". The app suggests 5 minutes; a clearer
+  message for an unexpected 4001 (rejected without the user's tap) could follow.
+- **Sign-in requests**: MetaMask always shows "Suspicious sign-in request" with two confirmations,
+  because the request comes from UP Wallet, not from the dApp's site. Expected; explained in the
+  page (Cross_Chain#123). Nothing to fix unless MetaMask changes.
+
+Improvements:
+- **OpenSea purchases decoded** in the request window (Seaport 1.6 `fulfillBasicOrder_efficient`,
+  selector `0x00000000`, and OpenSea's newer contract `0x4cD0…BC31`, selector `0x49290c1c`): today
+  they show as "call not recognised". This belongs to the page in Cross_Chain, for the site too.
+- A dApp on a chain other than the one chosen in the page (OpenSea's cross-chain checkout) is refused
+  by design: one UP, one network per session. Explain it better in the page, or accept it.
+- iPhone: not started (needs an Apple developer account and a review; MetaMask Connect and
+  WalletConnect work there too, the native parts differ).
+- Listing in Reown's wallet registry, so that dApps show UP Wallet in their list (needs a store
+  release first).
+
+Prototype parts to decide on before a release:
+- The diagnostic log (`app/diag.js`) and the "MetaMask opened" lines in the page's log: keep (useful
+  for support), hide behind a setting, or remove.
+- The build patches to MetaMask Connect (request timeout 5 minutes, connection renewed on focus,
+  `scripts/build-web.js`): check them at every MetaMask Connect update (the build fails if they no
+  longer apply).
 
 ## Before the repository or the app goes public
 
