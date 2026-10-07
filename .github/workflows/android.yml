@@ -32,11 +32,17 @@ jobs:
       - name: Web content from Cross_Chain at the pinned commit
         run: npm run web
 
-      - name: Layout test at phone width
+      # Installing Chromium and its system packages once hung until the job's 30-minute limit:
+      # each step has its own limit, so a hang fails early and names the step.
+      - name: Install Chromium for the tests
+        timeout-minutes: 10
         run: |
           npx --yes playwright@1.56.1 install --with-deps chromium
           npm install --no-save playwright@1.56.1
-          npm test
+
+      - name: Tests (phone layout, MetaMask, native features)
+        timeout-minutes: 5
+        run: npm test
 
       - name: Copy into the Android project
         run: npx cap sync android
