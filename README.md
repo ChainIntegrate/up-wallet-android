@@ -125,10 +125,6 @@ Prototype parts to decide on before a release:
 ## Before the repository or the app goes public
 
 - Optionally a separate Reown project for the app (own quota and statistics).
-- **History (blocks a public repository)**: the prototype's signing key (`prototype.keystore`,
-  password `android`) is gone from the files but still in the history. Once the APK signed with the
-  release key is installed and tested, restart the history from one clean commit. (After that phone
-  is migrated the old key updates no installed copy, but it has no place in a public repository.)
 - **Licenses**: MetaMask Connect allows non-commercial use or up to 10,000 monthly active users;
   beyond that, a license from ConsenSys or another library (THIRD_PARTY_NOTICES.md).
 - Privacy policy page (on the site) for the Play Store listing.
