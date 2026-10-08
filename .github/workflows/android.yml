@@ -80,8 +80,10 @@ jobs:
       - name: Signer of the APK
         run: |
           f=$(ls up-wallet-*.apk)
-          fp=$(keytool -printcert -jarfile "$f" | grep -m1 'SHA256:' | sed 's/.*SHA256: //')
-          owner=$(keytool -printcert -jarfile "$f" | grep -m1 'Owner:' | sed 's/.*Owner: //')
+          signer=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          certs=$("$signer" verify --print-certs "$f")
+          fp=$(echo "$certs" | grep -m1 'certificate SHA-256 digest' | sed 's/.*digest: //')
+          owner=$(echo "$certs" | grep -m1 'certificate DN' | sed 's/.*DN: //')
           if [ -n "$UPW_KEYSTORE_FILE" ]; then echo "::notice title=Release key::$f signed by $owner, SHA-256 $fp"
           else echo "::warning title=Debug key::$f signed by a throwaway debug key ($owner): it cannot update an installed release"; fi
 
