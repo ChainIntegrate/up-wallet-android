@@ -61,6 +61,8 @@ const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${
   });
   ck("a link to another page of the site opens that page on the site", href === SITE + "up-crosschain-guide.html#wallet", href);
 
+  ck("no button to read the address from the UP extension (there is no extension on a phone); the address field stays",
+    await p.evaluate(() => getComputedStyle(document.getElementById("connectUp")).display === "none" && !!document.getElementById("upAddress").offsetParent));
   ck("no page errors", !errs.length, errs.join("\n"));
   await b.close();
   console.log(res.join("\n"));

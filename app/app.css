@@ -10,3 +10,6 @@ html.in-app .modal, html.in-app .modal-body, html.in-app .modal-head, html.in-ap
   html.in-app .modal-head, html.in-app .modal-body { padding-left: 12px; padding-right: 12px; }
   html.in-app .modal-foot { padding: 10px 12px 12px; }
 }
+/* "Read the address from the UP extension" needs the LUKSO browser extension, which a phone does not
+   have: in the app the button only led to an error. The address is typed or pasted (and remembered). */
+html.in-app #connectUp { display: none; }
