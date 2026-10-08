@@ -75,7 +75,7 @@ The app holds no keys: signing stays in MetaMask. Backups of app data are off (`
   source when Android asks); artifacts are kept 30 days and need a GitHub sign-in. The run's summary
   says which key signed it: "Release key" with the certificate's SHA-256 fingerprint
   (`c70a8909…154446`), or a "Debug key" warning.
-- **Releases**: pushing a tag `v<versionName>` (for example `v0.7.2`) builds the APK and publishes it
+- **Releases**: pushing a tag `v<versionName>` (for example `v0.7.3`) builds the APK and publishes it
   as a GitHub pre-release, with the signer's fingerprint in the notes. The tag must match
   `versionName` in `android/app/build.gradle`, and the release key must be available, or nothing is
   published.
