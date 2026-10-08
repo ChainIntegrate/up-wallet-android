@@ -75,6 +75,16 @@ jobs:
           if [ -n "$UPW_KEYSTORE_FILE" ]; then cp android/app/build/outputs/apk/release/app-release.apk "up-wallet-${GITHUB_SHA::7}.apk"
           else cp android/app/build/outputs/apk/debug/app-debug.apk "up-wallet-${GITHUB_SHA::7}-debug.apk"; fi
 
+      # Which key signed the APK, in the run's annotations: the release key's certificate fingerprint
+      # (public, the same in every release), or a warning for a debug APK.
+      - name: Signer of the APK
+        run: |
+          f=$(ls up-wallet-*.apk)
+          fp=$(keytool -printcert -jarfile "$f" | grep -m1 'SHA256:' | sed 's/.*SHA256: //')
+          owner=$(keytool -printcert -jarfile "$f" | grep -m1 'Owner:' | sed 's/.*Owner: //')
+          if [ -n "$UPW_KEYSTORE_FILE" ]; then echo "::notice title=Release key::$f signed by $owner, SHA-256 $fp"
+          else echo "::warning title=Debug key::$f signed by a throwaway debug key ($owner): it cannot update an installed release"; fi
+
       - name: Remove the release key
         if: always()
         run: rm -f "$RUNNER_TEMP/upwallet.p12"
