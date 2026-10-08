@@ -3,11 +3,12 @@ name: Android APK
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # used only by the Release step, on tags
 
 jobs:
   build:
@@ -90,6 +91,30 @@ jobs:
       - name: Remove the release key
         if: always()
         run: rm -f "$RUNNER_TEMP/upwallet.p12"
+
+      # A tag v<versionName> publishes the APK as a GitHub pre-release (signed with the release key only).
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(grep -m1 'versionName' android/app/build.gradle | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then echo "::error::tag $GITHUB_REF_NAME does not match versionName $version"; exit 1; fi
+          if [ -z "$UPW_KEYSTORE_FILE" ]; then echo "::error::no release key: a debug APK is not published"; exit 1; fi
+          f=$(ls up-wallet-*.apk)
+          cp "$f" "up-wallet-$GITHUB_REF_NAME.apk"
+          signer=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          fp=$("$signer" verify --print-certs "$f" | grep -m1 'certificate SHA-256 digest' | sed 's/.*digest: //')
+          {
+            echo "UP Wallet for Android $GITHUB_REF_NAME (prototype), built from commit ${GITHUB_SHA::7}."
+            echo
+            echo "Signed with the release key, certificate SHA-256 \`$fp\`."
+            echo
+            echo "Install: open the .apk on the phone and allow installing from that source. You need MetaMask mobile with your Universal Profile's controller account in it."
+            echo
+            echo "Privacy policy: https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html"
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" "up-wallet-$GITHUB_REF_NAME.apk" --title "UP Wallet $GITHUB_REF_NAME" --notes-file notes.md --prerelease
 
       - uses: actions/upload-artifact@v4
         with:

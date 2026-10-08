@@ -4,10 +4,20 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **prototype, phases 1-4 done** and tested on an Android phone with OpenSea on Base: the app
-installs, shows the page, uses MetaMask mobile to sign, connects to dApps through WalletConnect links
-(pasted, opened with the app or shared to it), has the site relayer pay the gas, notifies dApp
-requests that arrive in the background and goes back to the browser. See "Still to do" below.
+Status: **prototype, phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea, Uniswap and
+hup.social on Base and Arc: the app installs, shows the page, uses MetaMask mobile to sign, connects
+to dApps through WalletConnect links (pasted, opened with the app or shared to it), has the site
+relayer pay the gas, notifies dApp requests that arrive in the background, stays running while a dApp
+is connected and goes back to the browser. APKs are signed with the release key (section Signing).
+No store release yet. See "Still to do" below.
+
+**Download**: the APK of each version is attached to its
+[release](https://github.com/ChainIntegrate/up-wallet-android/releases). On the phone, open the
+`.apk` and allow installing from that source when Android asks. You need MetaMask mobile, with your
+Universal Profile's controller account in it.
+
+Privacy policy: [up-wallet-app-privacy.html](https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html)
+on the site.
 
 ## What the app adds to the page
 
@@ -34,6 +44,13 @@ requests that arrive in the background and goes back to the browser. See "Still 
   dataSync with an ongoing notification): otherwise Android freezes it after a few minutes in the
   background and a dApp's request waits until UP Wallet is opened by hand. Stopped when no session is
   left. Android 15+ limits this service type to about 6 hours a day.
+- Panel 2 has no "Read the address from the UP extension" button: it needs the LUKSO browser
+  extension, which a phone does not have. The address is typed or pasted, and remembered.
+- Under the page's footer, the notice MetaMask Connect's license asks for, with links to the
+  third-party notices and to the privacy policy.
+- A diagnostic log (`app/diag.js`, at most 300 lines, kept on the phone): app start, foreground and
+  background, MetaMask requests and their outcome, dApp requests, notifications. No messages,
+  amounts, signatures or addresses. Shown at the bottom of the page with Copy and Clear buttons.
 - Panel 3 suggests MetaMask's Auto-lock at 5 minutes: when MetaMask locks with a request open, it
   drops it and the page gets "User rejected".
 - The WalletConnect metadata shown to dApps names the site and its icon, not the app's origin.
@@ -55,7 +72,13 @@ The app holds no keys: signing stays in MetaMask. Backups of app data are off (`
 
 - **CI**: every push builds the APK (GitHub Actions, "Android APK"). Download it from the run's
   artifacts (`up-wallet-apk`), unzip, and install the `.apk` on the phone (allow installing from this
-  source when Android asks).
+  source when Android asks); artifacts are kept 30 days and need a GitHub sign-in. The run's summary
+  says which key signed it: "Release key" with the certificate's SHA-256 fingerprint
+  (`c70a8909…154446`), or a "Debug key" warning.
+- **Releases**: pushing a tag `v<versionName>` (for example `v0.7.2`) builds the APK and publishes it
+  as a GitHub pre-release, with the signer's fingerprint in the notes. The tag must match
+  `versionName` in `android/app/build.gradle`, and the release key must be available, or nothing is
+  published.
 - **Locally** (needs the Android SDK and JDK 21):
 
   ```
@@ -89,12 +112,12 @@ other terms, MetaMask Connect and the WalletConnect bundle among them: see
 ## Still to do
 
 Open from the phone tests:
-- **Long background test**: connect a dApp, leave UP Wallet in the background 10+ minutes, then act on
-  the dApp; the request notification must arrive. Without the keep-alive service the app was frozen
-  after ~7 minutes; with it (build `066f1cb`), still after ~8 minutes: the WebView's renderer is a
-  separate process whose priority drops when the app is not visible. Build `66efc76`+1 keeps the
-  renderer important in the background (`setRendererPriorityPolicy`); to be tested. Also suggest
-  Battery usage "Unrestricted" for UP Wallet in Android's app settings.
+- **Long background**: with the keep-alive service and the renderer kept important
+  (`setRendererPriorityPolicy`), the app stayed awake in the latest phone tests: requests arrived and
+  the notification was created. On ColorOS the notification showed in the shade but not as a pop-up:
+  the "dApp requests" category needs "Banner notifications" turned on in Android's settings (off by
+  default for apps installed from an APK). Explain this in the app, or check it at first start.
+  Battery usage "Unrestricted" is also advisable.
 - **Way back from MetaMask**: after confirming, the user returns to UP Wallet by hand (MetaMask does
   not return to the calling app). Look for a MetaMask Connect option or a return link, if any.
 - **MetaMask cancels open requests when it locks** (auto-lock shorter than the time to read and
@@ -122,10 +145,13 @@ Prototype parts to decide on before a release:
   `scripts/build-web.js`): check them at every MetaMask Connect update (the build fails if they no
   longer apply).
 
-## Before the repository or the app goes public
+## Before a store release
 
-- Optionally a separate Reown project for the app (own quota and statistics).
-- **Licenses**: MetaMask Connect allows non-commercial use or up to 10,000 monthly active users;
-  beyond that, a license from ConsenSys or another library (THIRD_PARTY_NOTICES.md).
-- Privacy policy page (on the site) for the Play Store listing.
-- Remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests).
+The repository is public (since 8 October 2026), with the release key in CI secrets and the third-party
+notices in place. Before a Play Store release:
+- the privacy policy on the site names ChainIntegrate with info@chainintegrate.it: add the legal
+  entity once it exists; the server keeps its logs no longer than the policy says (30 days);
+- optionally a separate Reown project for the app (own quota and statistics);
+- **licenses**: MetaMask Connect allows non-commercial use or up to 10,000 monthly active users;
+  beyond that, a license from ConsenSys or another library (THIRD_PARTY_NOTICES.md);
+- remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests).
