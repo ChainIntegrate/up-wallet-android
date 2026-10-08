@@ -63,16 +63,28 @@ The app holds no keys: signing stays in MetaMask. Backups of app data are off (`
   npm run web            # or: CROSS_CHAIN_DIR=../Cross_Chain npm run web (that checkout must be at the pinned commit)
   npm test               # layout at phone width (needs Playwright)
   npx cap sync android
-  cd android && ./gradlew assembleDebug
+  cd android && ./gradlew assembleDebug    # signed with this machine's debug key
   ```
 
 To take a newer version of the page, change the commit in `UPSTREAM.json`.
 
 ## Signing
 
-APKs are signed with `android/app/prototype.keystore`, a key kept in the repository on purpose so
-that each new APK installs over the previous one. It is for this prototype only: a Play Store release
-will be signed with a different key that never enters the repository.
+The release key never enters the repository. CI reads it from two repository secrets,
+`UPW_KEYSTORE_B64` (the PKCS#12 file in base64, key alias `upwallet`) and `UPW_KEYSTORE_PASSWORD`,
+writes it to a temporary file for the build and deletes it afterwards. Each APK it builds,
+`up-wallet-<commit>.apk`, is signed with that key and installs over the previous one.
+
+Without the secrets (pull requests from forks, local builds) the build makes a debug APK,
+`up-wallet-<commit>-debug.apk`, signed with a throwaway key: Android refuses it as an update of the
+installed app. Keep a copy of the release key offline: without it, no update of the installed app is
+possible (users would have to uninstall and lose the app's data).
+
+## License
+
+MIT for this repository's code ([LICENSE](LICENSE)). The APK also contains third-party code under
+other terms, MetaMask Connect and the WalletConnect bundle among them: see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Still to do
 
@@ -113,16 +125,11 @@ Prototype parts to decide on before a release:
 ## Before the repository or the app goes public
 
 - Optionally a separate Reown project for the app (own quota and statistics).
-- **Signing key (blocks a public repository)**: `prototype.keystore` and its password are in the
-  repository and in all its history. Anyone could sign an APK that Android accepts as an update of this
-  app. Before going public: a release key kept outside the repository (GitHub secrets for CI), the
-  prototype key removed, and the history restarted from one clean commit. Installed copies must be
-  uninstalled once (the signature changes; app data is reset).
-- **Licenses (blocks a public repository)**: no LICENSE file yet (MIT, as Cross_Chain). MetaMask Connect
-  (`@metamask/connect-evm`, `@metamask/connect-multichain`) is under ConsenSys' own license:
-  non-commercial use or up to 10,000 monthly active users, with a prominent notice in each copy that
-  the program uses it and that it is ConsenSys' copyright, and the same terms for the resulting
-  program. The APK bundles it (and the build patches it): a THIRD_PARTY_NOTICES file and the notice
-  inside the app are needed; beyond those terms, a license from ConsenSys or another library.
+- **History (blocks a public repository)**: the prototype's signing key (`prototype.keystore`,
+  password `android`) is gone from the files but still in the history. Once the APK signed with the
+  release key is installed and tested, restart the history from one clean commit. (After that phone
+  is migrated the old key updates no installed copy, but it has no place in a public repository.)
+- **Licenses**: MetaMask Connect allows non-commercial use or up to 10,000 monthly active users;
+  beyond that, a license from ConsenSys or another library (THIRD_PARTY_NOTICES.md).
 - Privacy policy page (on the site) for the Play Store listing.
 - Remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests).

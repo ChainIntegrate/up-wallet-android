@@ -7,8 +7,8 @@ android {
         applicationId "it.chainintegrate.upwallet"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 16
-        versionName "0.6.3"
+        versionCode 17
+        versionName "0.7.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,24 +16,32 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // Prototype only: a fixed key in the repository, so that every APK built by CI installs over the
-    // previous one. It must never sign a Play Store release; that key will live outside the repository.
+    // The release key is never in the repository. CI writes it from the repository's secrets to a
+    // temporary file and passes its path and password in the environment (see .github/workflows).
+    // Without them (a fork, a local build) only the debug build can be made, with the machine's own
+    // debug key: such an APK cannot update an installed release.
+    def releaseKey = System.getenv("UPW_KEYSTORE_FILE")
     signingConfigs {
-        prototype {
-            storeFile file('prototype.keystore')
-            storePassword 'android'
-            keyAlias 'prototype'
-            keyPassword 'android'
+        if (releaseKey) {
+            release {
+                storeFile file(releaseKey)
+                storePassword System.getenv("UPW_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("UPW_KEY_ALIAS") ?: "upwallet"
+                keyPassword System.getenv("UPW_KEYSTORE_PASSWORD")
+            }
         }
     }
     buildTypes {
-        debug {
-            signingConfig signingConfigs.prototype
-        }
         release {
+            if (releaseKey) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+    // Android lint is not part of this project's checks (the tests are in test/): it must not stop
+    // the release build.
+    lint {
+        checkReleaseBuilds false
     }
 }
 

@@ -234,7 +234,32 @@ function watchPage() {
   if (native()) LocalNotifications.createChannel({ id: "requests", name: N.channel(), importance: 5, visibility: 1, vibration: true }).catch(() => null);
 }
 
+// The notice MetaMask Connect's license asks for in each copy of a program that uses it, under the
+// page's footer (the page's own footer already carries Reown's notice for WalletConnect).
+const NOTICES = "https://github.com/ChainIntegrate/up-wallet-android/blob/main/THIRD_PARTY_NOTICES.md";
+function addNotice() {
+  const footer = document.querySelector(".site-footer");
+  if (!footer) return;
+  const d = document.createElement("div");
+  d.id = "appNotice";
+  d.style.cssText = "font-size:11.5px; margin:10px 4px 0; color:var(--muted, #6b7280);";
+  const a = document.createElement("a");
+  a.href = NOTICES; a.target = "_blank"; a.rel = "noopener";
+  const fill = () => {
+    d.textContent = en()
+      ? "UP Wallet app: uses MetaMask Connect, © ConsenSys Software Inc., under ConsenSys' license (non-commercial use or up to 10,000 monthly active users). "
+      : "App UP Wallet: usa MetaMask Connect, © ConsenSys Software Inc., con la licenza di ConsenSys (uso non commerciale o fino a 10.000 utenti attivi al mese). ";
+    a.textContent = en() ? "Third-party notices" : "Componenti di terzi";
+    d.appendChild(a);
+  };
+  fill();
+  footer.insertAdjacentElement("afterend", d);
+  const lang = document.getElementById("langToggle");
+  if (lang) lang.addEventListener("click", () => setTimeout(fill, 0));
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  addNotice();
   addBackButton();
   watchPage();
   remember();
