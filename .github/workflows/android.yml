@@ -104,7 +104,8 @@ jobs:
           if [ "$GITHUB_REF_NAME" != "v$version" ]; then echo "::error::tag $GITHUB_REF_NAME does not match versionName $version"; exit 1; fi
           if [ -z "$UPW_KEYSTORE_FILE" ]; then echo "::error::no release key: a debug APK is not published"; exit 1; fi
           f=$(ls up-wallet-*.apk)
-          cp "$f" "up-wallet-$GITHUB_REF_NAME.apk"
+          mv "$f" "up-wallet-$GITHUB_REF_NAME.apk"   # one file in the artifact too, named after the release
+          f="up-wallet-$GITHUB_REF_NAME.apk"
           signer=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
           fp=$("$signer" verify --print-certs "$f" | grep -m1 'certificate SHA-256 digest' | sed 's/.*digest: //')
           {
