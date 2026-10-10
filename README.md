@@ -36,6 +36,12 @@ on the site.
   app or text shared to it (Share -> UP Wallet) is put in the link field (the native side is
   `IncomingLinkPlugin.java`); connecting still takes a tap on the page's button. The UP address and
   the network are remembered on the phone.
+- UP Wallet announces its own link, `upwallet://`, in the WalletConnect metadata: a dApp that honours
+  it opens UP Wallet (not another wallet app) when it sends a request. "Back to the dApp" goes to the
+  dApp's own app when the dApp announced its link (`redirect.native`), else to the app that opened a
+  link to UP Wallet (Android's referrer), else to the default browser.
+- Panel 3 has a hint and a button to Android's settings of the "dApp requests" notifications: some
+  phones (ColorOS among them) keep pop-up notifications off for apps installed from an APK.
 - A dApp request that arrives while UP Wallet is in the background shows a notification (Capacitor
   Local Notifications; Android asks for the permission when you connect MetaMask or a dApp): a tap
   brings UP Wallet to the front. Once the dApp has its answer, a "Back to the dApp" button brings the
@@ -114,10 +120,13 @@ other terms, MetaMask Connect and the WalletConnect bundle among them: see
 Open from the phone tests:
 - **Long background**: with the keep-alive service and the renderer kept important
   (`setRendererPriorityPolicy`), the app stayed awake in the latest phone tests: requests arrived and
-  the notification was created. On ColorOS the notification showed in the shade but not as a pop-up:
-  the "dApp requests" category needs "Banner notifications" turned on in Android's settings (off by
-  default for apps installed from an APK). Explain this in the app, or check it at first start.
+  the notification was created. On ColorOS the notification showed in the shade but not as a pop-up
+  until "Banner notifications" is turned on (the app now explains it and opens the setting).
   Battery usage "Unrestricted" is also advisable.
+- **hup.social (app)** opens the LUKSO UP app on each request (through its profile.link links), not
+  the connected wallet; the request reaches UP Wallet anyway (notification). To check whether hup
+  honours the `upwallet://` link UP Wallet now announces, and whether "Back to the dApp" returns to
+  hup's app.
 - **Way back from MetaMask**: after confirming, the user returns to UP Wallet by hand (MetaMask does
   not return to the calling app). Look for a MetaMask Connect option or a return link, if any.
 - **MetaMask cancels open requests when it locks** (auto-lock shorter than the time to read and

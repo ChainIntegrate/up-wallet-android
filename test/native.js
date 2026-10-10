@@ -149,6 +149,25 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   ck("diagnostic log survives a restart and shows the restart", diag.summary === "Registro diagnostico (app)" && /marker-before-restart[\s\S]*Avvio dell'app/.test(diag.text) && diag.buttons.join(",") === "Copia,Svuota", JSON.stringify(diag));
 
   const html = fs.readFileSync(path.join(WWW, "up-wallet.html"), "utf8");
+  const back = await p.evaluate(async () => {
+    const got = [];
+    window.__upwalletMinimize = (o) => got.push(o.url);
+    const btn = document.getElementById("backToDapp");
+    const click = async (redirect) => {
+      walletKit = { getActiveSessions: () => ({ t: { peer: { metadata: { name: "Hup", url: "https://www.hup.social", redirect } } } }) };
+      btn.hidden = false; btn.click(); await new Promise((r) => setTimeout(r, 20));
+    };
+    await click({ native: "hupsocial://" });
+    await click({ native: "javascript://alert(1)" });
+    await click({ native: "https://www.hup.social" });
+    await click(undefined);
+    walletKit = null; window.__upwalletMinimize = null;
+    return got;
+  });
+  ck("back to the dApp: the dApp's own app link when it announced one; never a web, script or system link",
+    JSON.stringify(back) === JSON.stringify(["hupsocial://", null, null, null]), JSON.stringify(back));
+  ck("WalletConnect metadata: UP Wallet announces its own link (upwallet://) for dApps to bring it forward",
+    html.includes('redirect: { native: "upwallet://" },'));
   ck("WalletConnect metadata: dApps are shown the site and its icon, not https://localhost",
     html.includes('url: "https://crosschain-lukso.chainintegrate.it",') && html.includes('icons: ["https://crosschain-lukso.chainintegrate.it/favicon.ico"]') && !/url: location\.origin/.test(html));
   ck("the WalletConnect Project ID is in the app's config", /walletConnectProjectId": "[0-9a-f]{32}"/.test(fs.readFileSync(path.join(WWW, "config.js"), "utf8")));

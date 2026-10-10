@@ -83,7 +83,8 @@ async function main() {
   // dApps are shown the site instead (its address and icon).
   const META = "      url: location.origin,\n      icons: [location.origin + \"/favicon.ico\"],";
   if (!html.includes(META)) throw new Error("WalletConnect metadata (url, icons) not found in the page");
-  html = html.replace(META, `      url: ${JSON.stringify(site.replace(/\/$/, ""))},\n      icons: [${JSON.stringify(site + "favicon.ico")}],`);
+  // redirect.native: UP Wallet's own link, which dApps open to bring the app forward with a request.
+  html = html.replace(META, `      url: ${JSON.stringify(site.replace(/\/$/, ""))},\n      icons: [${JSON.stringify(site + "favicon.ico")}],\n      redirect: { native: "upwallet://" },`);
   fs.writeFileSync(path.join(OUT, PAGE), html);
 
   fs.mkdirSync(path.join(OUT, "app"), { recursive: true });

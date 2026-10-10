@@ -136,6 +136,10 @@ const N = {
   channel: () => (en() ? "dApp requests" : "Richieste delle dApp"),
   keep: (who) => (en() ? `Connected to ${who}: UP Wallet stays active to receive its requests.` : `Collegato a ${who}: UP Wallet resta attivo per ricevere le richieste.`),
   keepChannel: () => (en() ? "Connection to dApps" : "Collegamento alle dApp"),
+  notifTip: () => (en()
+    ? "Request notifications not popping up at the top of the screen? Some phones (ColorOS among them) keep pop-ups off for apps installed from an APK: turn on \"Banner notifications\" (or \"Pop-up\") for \"dApp requests\"."
+    : "Le notifiche delle richieste non compaiono in alto sullo schermo? Alcuni telefoni (ColorOS tra questi) tengono spenti i popup per le app installate da APK: attiva \"Notifiche banner\" (o \"Popup\") per \"Richieste delle dApp\"."),
+  notifBtn: () => (en() ? "Notification settings" : "Impostazioni delle notifiche"),
   lockTip: () => (en()
     ? "Tip: in MetaMask set Auto-lock to 5 minutes (Settings → Security & privacy). If MetaMask locks while you are reading a request, it cancels it and the page gets \"rejected\"."
     : "Consiglio: in MetaMask imposta il Blocco automatico a 5 minuti (Impostazioni → Sicurezza e privacy). Se MetaMask si blocca mentre leggi una richiesta, la annulla e qui risulta \"rifiutata\"."),
@@ -175,6 +179,21 @@ function keepAlive(who) {
   (who ? k.start({ text: N.keep(who), channel: N.keepChannel() }) : k.stop()).catch?.((e) => diag("Keep-alive failed: " + (e && e.message)));
 }
 
+// The dApp's own app link, when the connected dApp announced one to WalletConnect (redirect.native,
+// e.g. "someapp://"): "Back to the dApp" opens that app. Only custom schemes: a web address would
+// open the browser anyway, and schemes that reach the system or UP Wallet itself are never used.
+function dappLink() {
+  let sessions = {};
+  try { sessions = (typeof walletKit !== "undefined" && walletKit && walletKit.getActiveSessions()) || {}; } catch (e) { sessions = {}; }
+  for (const s of Object.values(sessions)) {
+    const r = s && s.peer && s.peer.metadata && s.peer.metadata.redirect;
+    const n = r && typeof r.native === "string" ? r.native.trim() : "";
+    const scheme = (n.match(/^([a-z][a-z0-9+.-]*):\/\//i) || [])[1];
+    if (scheme && !/^(https?|javascript|file|content|intent|data|wc|upwallet|android-app|market)$/i.test(scheme)) return n;
+  }
+  return null;
+}
+
 let backBtn = null, backTimer = null;
 function showBack(on) {
   if (!backBtn) return;
@@ -192,11 +211,13 @@ function addBackButton() {
   backBtn.addEventListener("click", () => {
     showBack(false);
     diag(en() ? "Back to the dApp." : "Torna alla dApp.");
-    if (window.__upwalletMinimize) return window.__upwalletMinimize();   // tests
+    const url = dappLink();
+    if (window.__upwalletMinimize) return window.__upwalletMinimize({ url });   // tests
     if (!native()) return;
-    // The browser's own task, on the tab it was showing; without a default browser, just the background.
-    IncomingLink.backToBrowser().then((r) => {
-      diag(r && r.ok ? `→ ${r.browser}` : "→ background");
+    // The dApp's app (its own link, or the app that opened UP Wallet), else the browser's task on the
+    // tab it was showing; when none can be opened, just the background.
+    IncomingLink.backToDapp({ url }).then((r) => {
+      diag(r && r.ok ? `→ ${r.target} (${r.via})` : "→ background");
       if (!r || !r.ok) return App.minimizeApp();
     }).catch(() => App.minimizeApp().catch(() => null));
   });
@@ -224,6 +245,19 @@ function watchPage() {
     tip.id = "mmLockTip"; tip.className = "note"; tip.style.marginTop = "6px";
     tip.textContent = N.lockTip();
     signer.insertAdjacentElement("afterend", tip);
+  }
+  if (signer && native() && !$("notifTip")) {
+    const tip = document.createElement("div");
+    tip.id = "notifTip"; tip.className = "note"; tip.style.marginTop = "6px";
+    const text = document.createElement("span");
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "secondary"; b.style.marginTop = "6px";
+    const fill = () => { text.textContent = N.notifTip() + " "; b.textContent = N.notifBtn(); };
+    fill();
+    b.addEventListener("click", () => IncomingLink.openNotificationSettings({ channel: "requests" }).catch(() => null));
+    tip.append(text, b);
+    ($("mmLockTip") || signer).insertAdjacentElement("afterend", tip);
+    new MutationObserver(fill).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
   }
   const pair = $("pairBtn");
   if (pair) pair.addEventListener("click", askPermission);

@@ -30,6 +30,15 @@
                 <data android:scheme="wc" />
             </intent-filter>
 
+            <!-- UP Wallet's own link (upwallet://), announced to dApps in the WalletConnect metadata: a dApp
+                 opens it to bring UP Wallet to the front when it sends a request. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="upwallet" />
+            </intent-filter>
+
             <!-- Text shared to the app (Share -> UP Wallet): the page looks for a wc: link in it. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -62,6 +71,11 @@
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
+        </intent>
+        <!-- "Back to the dApp": the launch intent of the app that opened a link to UP Wallet. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 
