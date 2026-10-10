@@ -16,10 +16,15 @@ const INFO = Object.freeze({
   rdns: "it.chainintegrate.upwallet.metamask",
 });
 
-// The networks MetaMask may be asked to use: every network of chains.js, with its public RPC.
+// The page's networks: its own list (LUKSO first, then chains.js), or chains.js with LUKSO.
+function allNets() {
+  if (typeof NETWORKS !== "undefined") return NETWORKS;
+  return [...(typeof LUKSO_CHAIN !== "undefined" ? [LUKSO_CHAIN] : []), ...(typeof CHAINS !== "undefined" ? CHAINS : [])];
+}
+// The networks MetaMask may be asked to use: every network of the page, with its public RPC.
 function supportedNetworks() {
   const out = {};
-  for (const c of (typeof CHAINS !== "undefined" ? CHAINS : [])) {
+  for (const c of allNets()) {
     if (c.chainId && typeof c.rpc === "string" && c.rpc.startsWith("https://")) out["0x" + c.chainId.toString(16)] = c.rpc;
   }
   return out;
@@ -28,8 +33,13 @@ function supportedNetworks() {
 // The network chosen in the page (panel 1), as a hex chain id, or null.
 function selectedChain() {
   const el = document.getElementById("network");
-  const c = el && typeof CHAINS !== "undefined" ? CHAINS.find((x) => x.key === el.value) : null;
+  const c = el ? allNets().find((x) => x.key === el.value) : null;
   return c && c.chainId ? "0x" + c.chainId.toString(16) : null;
+}
+// What MetaMask needs to add a network it does not know yet (LUKSO, Arc, … are not in a fresh MetaMask).
+function chainConfig(id) {
+  const c = allNets().find((x) => x.chainId && "0x" + x.chainId.toString(16) === id);
+  return c && typeof addChainParams === "function" ? addChainParams(c) : undefined;
 }
 // Networks asked for at connection, besides the chosen one: changing among them needs no new approval.
 const MAIN_CHAINS = ["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"];   // Base, Polygon, Arbitrum, Avalanche, Ethereum
@@ -115,7 +125,7 @@ async function follow() {
   const id = selectedChain();
   if (!client || !connected || !id) return;
   diag(`MetaMask: network ${id}`);
-  try { await client.switchChain({ chainId: id }); } catch (e) { console.error("Network change refused", e); }
+  try { await client.switchChain({ chainId: id, chainConfiguration: chainConfig(id) }); } catch (e) { console.error("Network change refused", e); }
 }
 
 // MetaMask Connect remembers the last network used and may bring it back after connecting (when a stored
@@ -127,14 +137,24 @@ async function keepChain(c) {
   const id = selectedChain();
   if (!connected || !id || c.selectedChainId === id || !approvedChains().includes(id)) return;
   diag(`MetaMask: network ${c.selectedChainId} → ${id}`);
-  try { await c.switchChain({ chainId: id }); } catch (e) { console.error("Network change refused", e); }
+  try { await c.switchChain({ chainId: id, chainConfiguration: chainConfig(id) }); } catch (e) { console.error("Network change refused", e); }
 }
 
 async function requestInner(args) {
   const c = client || await start();
   if (args && (args.method === "eth_requestAccounts" || args.method === "wallet_requestPermissions")) {
-    const chainIds = wantedChains();
-    const r = await c.connect({ chainIds });
+    let chainIds = wantedChains();
+    let r;
+    try {
+      r = await c.connect({ chainIds });
+    } catch (e) {
+      // MetaMask may refuse a connection that names a network it does not have (LUKSO in a fresh
+      // MetaMask): connect for the main networks only, then follow() asks MetaMask to add and use it.
+      if (!e || e.code === 4001 || chainIds.every((x) => MAIN_CHAINS.includes(x))) throw e;
+      diag(`MetaMask: connection for ${chainIds[0]} refused (${(e.message || "").slice(0, 60)}), retried for the main networks`);
+      chainIds = [...MAIN_CHAINS];
+      r = await c.connect({ chainIds });
+    }
     connected = true;
     try { localStorage.setItem(CHAINS_KEY, JSON.stringify([...new Set([...approvedChains(), ...chainIds])])); } catch (e) { /* not kept */ }
     await follow();

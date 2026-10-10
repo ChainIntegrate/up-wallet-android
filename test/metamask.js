@@ -22,7 +22,7 @@ async function page(b, bundle) {
   await p.route("**/*", (r) => {
     const u = new URL(r.request().url());
     // RPCs of Base and Polygon: they answer their chain id; the UP has no code (the check stops after the wallet).
-    const RPC = { "base-rpc.publicnode.com": "0x2105", "polygon.drpc.org": "0x89" };
+    const RPC = { "base-rpc.publicnode.com": "0x2105", "polygon.drpc.org": "0x89", "rpc.mainnet.lukso.network": "0x2a" };
     if (RPC[u.host]) {
       const q = JSON.parse(r.request().postData() || "{}");
       const one = (x) => ({ jsonrpc: "2.0", id: x.id, result: x.method === "eth_chainId" ? RPC[u.host] : "0x" });
@@ -74,8 +74,8 @@ async function page(b, bundle) {
     !store.dbs.includes("mmconnect-kv-store") && ["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"].every((c) => store.chains.includes(c)), JSON.stringify(store));
   ck("analytics off; MetaMask opened by metamask:// links through the app", mm.opt.analytics && mm.opt.analytics.enabled === false && mm.opt.mobile.useDeeplink === true && mm.opt.mobile.open === "function", JSON.stringify(mm.opt));
   const nets = mm.opt.api.supportedNetworks;
-  ck("networks from chains.js with their RPC (Base, Polygon, Arbitrum, Avalanche, Arc)",
-    nets["0x2105"] === "https://base-rpc.publicnode.com" && nets["0x89"] && nets["0xa4b1"] && nets["0xa86a"] && nets["0x13b2"], JSON.stringify(nets).slice(0, 300));
+  ck("networks of the page with their RPC (LUKSO, Base, Polygon, Arbitrum, Avalanche, Arc)",
+    nets["0x2a"] === "https://rpc.mainnet.lukso.network" && nets["0x2105"] === "https://base-rpc.publicnode.com" && nets["0x89"] && nets["0xa4b1"] && nets["0xa86a"] && nets["0x13b2"], JSON.stringify(nets).slice(0, 300));
   ck("the dApp name MetaMask shows is the app's", mm.opt.dapp.name === "UP Wallet (ChainIntegrate)", JSON.stringify(mm.opt.dapp));
   const status = await p.$eval("#complianceBox", (e) => e.textContent);
   ck("the page does not say that no wallet was found", !/non trovato|not found/i.test(status), status);
@@ -91,7 +91,7 @@ async function page(b, bundle) {
   for (const v of ["ba", "b", ""]) { await p.fill("#networkFilter", v); await p.waitForTimeout(200); }
   await p.waitForTimeout(2000);
   const sw = await p.evaluate((n) => window.__mm.switches.slice(n), before);
-  const finalId = await p.evaluate(() => { const c = CHAINS.find((x) => x.key === document.getElementById("network").value); return "0x" + c.chainId.toString(16); });
+  const finalId = await p.evaluate(() => { const c = NETWORKS.find((x) => x.key === document.getElementById("network").value); return "0x" + c.chainId.toString(16); });
   ck("typing or deleting in the network filter: only the network finally chosen reaches MetaMask (after 1.5 s)", JSON.stringify(sw) === JSON.stringify([finalId]), JSON.stringify(sw) + " final " + finalId);
   const sig = await p.evaluate(async () => {
     const got = [];
@@ -145,6 +145,25 @@ async function page(b, bundle) {
   ck("that correction is noted in the diagnostic log, without opening MetaMask",
     /MetaMask: network 0x89 → 0x2105/.test(second.diag) && !(await p.$$eval("#log .line-dim", (els) => els.some((e) => /Apertura di MetaMask/.test(e.textContent)))), second.diag + JSON.stringify(second.switches));
   ck("no page errors (resumed connection)", !errs.length, errs.join("\n"));
+  await p.close();
+
+  // LUKSO, which a fresh MetaMask does not have: the connection naming it is refused, the app connects
+  // for the main networks and asks MetaMask to add LUKSO and use it.
+  ({ p, errs } = await page(b, mockBundle));
+  await p.evaluate(() => { window.__mmUnknown = "0x2a"; });
+  await p.selectOption("#network", "lukso");
+  await p.fill("#upAddress", "0x4a2605796e0d91A9667d6E30365aEEC384C48c27");
+  await p.click("#connectSigner");
+  await p.waitForFunction(() => /chainId 42\b/.test(document.getElementById("complianceBox").textContent) && /0x406f/i.test(document.getElementById("complianceBox").textContent), null, { timeout: 5000 }).catch(() => null);
+  await p.waitForTimeout(300);
+  const lk = await p.evaluate(() => ({ connects: window.__mm.connects, switches: window.__mm.switches, configs: window.__mm.configs, status: document.getElementById("complianceBox").textContent,
+    diag: JSON.parse(localStorage.getItem("upwallet.diag") || "[]").filter((l) => /retried/.test(l)).join("\n") }));
+  const cfg = (lk.configs || [])[lk.switches.indexOf("0x2a")] || {};
+  ck("LUKSO: refused connection retried for the main networks, then MetaMask asked to add and use LUKSO",
+    lk.connects.length === 2 && lk.connects[0][0] === "0x2a" && !lk.connects[1].includes("0x2a") && lk.switches.includes("0x2a")
+    && cfg.chainId === "0x2a" && cfg.chainName === "LUKSO" && cfg.rpcUrls[0] === "https://rpc.mainnet.lukso.network" && cfg.nativeCurrency.symbol === "LYX" && /retried/.test(lk.diag), JSON.stringify(lk).slice(0, 600));
+  ck("LUKSO: the page's check sees the wallet on LUKSO (chainId 42)", /✅ 0x406f822aC86b61d4cDf4cD84833f7e5561609C02 · chainId 42(?!\d)/.test(lk.status), lk.status);
+  ck("no page errors (LUKSO)", !errs.length, errs.join("\n"));
   await p.close();
 
   ({ p, errs } = await page(b, null));

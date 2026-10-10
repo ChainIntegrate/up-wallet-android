@@ -22,11 +22,17 @@ export async function createEVMClient(options) {
     // window.__mmLateChain: like MetaMask Connect resuming a stored connection, a late session message
     // brings back the network remembered from before, right after connect() has answered.
     async connect({ chainIds }) {
-      window.__mm.connects.push(chainIds); chain = chainIds[0];
+      window.__mm.connects.push(chainIds);
+      // window.__mmUnknown: a network MetaMask does not have; a connection naming it is refused.
+      if (window.__mmUnknown && chainIds.includes(window.__mmUnknown)) throw Object.assign(new Error("Unrecognized chain ID " + window.__mmUnknown), { code: -32603 });
+      chain = chainIds[0];
       if (window.__mmLateChain) setTimeout(() => changed(window.__mmLateChain), 0);
       return { accounts: ["0x406f822aC86b61d4cDf4cD84833f7e5561609C02"], chainId: chain };
     },
     // Like MetaMask Connect: nothing to do when already on that network.
-    async switchChain({ chainId }) { window.__mm.switches.push(chainId); if (chainId !== chain) changed(chainId); },
+    async switchChain({ chainId, chainConfiguration }) {
+      window.__mm.switches.push(chainId); (window.__mm.configs = window.__mm.configs || []).push(chainConfiguration || null);
+      if (chainId !== chain) changed(chainId);
+    },
   };
 }
