@@ -158,21 +158,32 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   const html = fs.readFileSync(path.join(WWW, "up-wallet.html"), "utf8");
   const back = await p.evaluate(async () => {
     const got = [];
-    window.__upwalletMinimize = (o) => got.push(o.url);
+    window.__upwalletMinimize = (o) => got.push([o.url, o.site]);
     const btn = document.getElementById("backToDapp");
-    const click = async (redirect) => {
-      walletKit = { getActiveSessions: () => ({ t: { peer: { metadata: { name: "Hup", url: "https://www.hup.social", redirect } } } }) };
+    const click = async (redirect, url = "https://www.hup.social/feed?x=1") => {
+      walletKit = { getActiveSessions: () => ({ t: { peer: { metadata: { name: "Hup", url, redirect } } } }) };
       btn.hidden = false; btn.click(); await new Promise((r) => setTimeout(r, 20));
     };
     await click({ native: "hupsocial://" });
     await click({ native: "javascript://alert(1)" });
     await click({ native: "https://www.hup.social" });
     await click(undefined);
+    await click(undefined, "http://hup.social");
+    await click(undefined, "javascript:alert(1)");
+    // two dApps: the one that connected last (dappName) comes first
+    const ln = document.createElement("div"); ln.textContent = "Richiesta di connessione da: Two (https://two.example) — verifica del dominio: VALID";
+    document.getElementById("log").appendChild(ln); await new Promise((r) => setTimeout(r, 20));
+    walletKit = { getActiveSessions: () => ({ a: { peer: { metadata: { url: "https://one.example" } } }, b: { peer: { metadata: { url: "https://two.example", redirect: { native: "two://" } } } } }) };
+    btn.hidden = false; btn.click(); await new Promise((r) => setTimeout(r, 20));
     walletKit = null; window.__upwalletMinimize = null;
     return got;
   });
+  const SITE = "https://www.hup.social/";
   ck("back to the dApp: the dApp's own app link when it announced one; never a web, script or system link",
-    JSON.stringify(back) === JSON.stringify(["hupsocial://", null, null, null]), JSON.stringify(back));
+    JSON.stringify(back.slice(0, 4).map((b) => b[0])) === JSON.stringify(["hupsocial://", null, null, null]), JSON.stringify(back));
+  ck("back to the dApp: the dApp's site (https origin only) for an app installed for it (installed web app); never http or other schemes",
+    back.slice(0, 4).every((b) => b[1] === SITE) && back[4][1] === null && back[5][1] === null, JSON.stringify(back));
+  ck("back to the dApp: with two dApps connected, the one that connected last", JSON.stringify(back[6]) === JSON.stringify(["two://", "https://two.example/"]), JSON.stringify(back[6]));
   ck("WalletConnect metadata: UP Wallet announces its own link (upwallet://) for dApps to bring it forward",
     html.includes('redirect: { native: "upwallet://" },'));
   ck("WalletConnect metadata: dApps are shown the site and its icon, not https://localhost",

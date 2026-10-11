@@ -8,6 +8,10 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -57,8 +61,10 @@ public class IncomingLinkPlugin extends Plugin {
      * Back to the dApp, in this order:
      * 1. the dApp's own app link ({url}, e.g. "someapp://", announced by the dApp to WalletConnect);
      * 2. the app that opened a link to UP Wallet (its referrer);
-     * 3. the default browser's task, on the tab it was showing (its launch intent resumes the task).
-     * Returns {ok, via: "dapp" | "source" | "browser", target}; ok=false when none could be opened:
+     * 3. an app installed for the dApp's site ({site}, its https address): an installed web app
+     *    (PWA), or an app that opens that site's links. Browsers, which open any site, do not count;
+     * 4. the default browser's task, on the tab it was showing (its launch intent resumes the task).
+     * Returns {ok, via: "dapp" | "source" | "site-app" | "browser", target}; ok=false when none could be opened:
      * the page then just moves to the background.
      */
     @PluginMethod
@@ -88,6 +94,22 @@ public class IncomingLinkPlugin extends Plugin {
                 } catch (ActivityNotFoundException | SecurityException e) { /* next way */ }
             }
         }
+        String site = call.getString("site");
+        if (site != null && site.startsWith("https://")) {
+            try {
+                String pkg = siteApp(pm, site);
+                if (pkg != null) {
+                    Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(site));
+                    view.addCategory(Intent.CATEGORY_BROWSABLE);
+                    view.setPackage(pkg);
+                    view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getActivity().startActivity(view);
+                    ret.put("ok", true); ret.put("via", "site-app"); ret.put("target", pkg);
+                    call.resolve(ret);
+                    return;
+                }
+            } catch (ActivityNotFoundException | SecurityException e) { /* next way */ }
+        }
         try {
             Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"));
             ResolveInfo ri = pm.resolveActivity(view, PackageManager.MATCH_DEFAULT_ONLY);
@@ -101,6 +123,25 @@ public class IncomingLinkPlugin extends Plugin {
             ret.put("ok", false);
         }
         call.resolve(ret);
+    }
+
+    // An app that opens this site's links but not any site's: an installed web app or the site's own
+    // app. Apps that also open an unrelated address (browsers) are left out, and so is UP Wallet.
+    private String siteApp(PackageManager pm, String site) {
+        Set<String> generic = new HashSet<>();
+        for (ResolveInfo ri : handlers(pm, "https://example.com/")) generic.add(ri.activityInfo.packageName);
+        for (ResolveInfo ri : handlers(pm, site)) {
+            String pkg = ri.activityInfo.packageName;
+            if (!generic.contains(pkg) && !"android".equals(pkg) && !pkg.equals(getContext().getPackageName())) return pkg;
+        }
+        return null;
+    }
+
+    private static List<ResolveInfo> handlers(PackageManager pm, String url) {
+        Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        view.addCategory(Intent.CATEGORY_BROWSABLE);
+        int flags = Build.VERSION.SDK_INT >= 23 ? PackageManager.MATCH_ALL : 0;
+        return pm.queryIntentActivities(view, flags);
     }
 
     /** Kept for the page of older builds: the default browser only. */

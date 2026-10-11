@@ -184,14 +184,27 @@ function keepAlive(who) {
 // The dApp's own app link, when the connected dApp announced one to WalletConnect (redirect.native,
 // e.g. "someapp://"): "Back to the dApp" opens that app. Only custom schemes: a web address would
 // open the browser anyway, and schemes that reach the system or UP Wallet itself are never used.
-function dappLink() {
+function dappSessions() {
   let sessions = {};
   try { sessions = (typeof walletKit !== "undefined" && walletKit && walletKit.getActiveSessions()) || {}; } catch (e) { sessions = {}; }
-  for (const s of Object.values(sessions)) {
-    const r = s && s.peer && s.peer.metadata && s.peer.metadata.redirect;
+  // The dApp that connected last first (its host is dappName), then the others.
+  const all = Object.values(sessions).filter((s) => s && s.peer && s.peer.metadata);
+  return all.sort((a, b) => (hostOf(b.peer.metadata.url) === dappName) - (hostOf(a.peer.metadata.url) === dappName));
+}
+function dappLink() {
+  for (const s of dappSessions()) {
+    const r = s.peer.metadata.redirect;
     const n = r && typeof r.native === "string" ? r.native.trim() : "";
     const scheme = (n.match(/^([a-z][a-z0-9+.-]*):\/\//i) || [])[1];
     if (scheme && !/^(https?|javascript|file|content|intent|data|wc|upwallet|android-app|market)$/i.test(scheme)) return n;
+  }
+  return null;
+}
+// The dApp's site (https only, origin only): Android opens it with an app installed for that site
+// (an installed web app, or the site's own app), never with a browser.
+function dappSite() {
+  for (const s of dappSessions()) {
+    try { const u = new URL(s.peer.metadata.url); if (u.protocol === "https:") return u.origin + "/"; } catch (e) { /* next */ }
   }
   return null;
 }
@@ -213,12 +226,12 @@ function addBackButton() {
   backBtn.addEventListener("click", () => {
     showBack(false);
     diag(en() ? "Back to the dApp." : "Torna alla dApp.");
-    const url = dappLink();
-    if (window.__upwalletMinimize) return window.__upwalletMinimize({ url });   // tests
+    const url = dappLink(), site = dappSite();
+    if (window.__upwalletMinimize) return window.__upwalletMinimize({ url, site });   // tests
     if (!native()) return;
-    // The dApp's app (its own link, or the app that opened UP Wallet), else the browser's task on the
-    // tab it was showing; when none can be opened, just the background.
-    IncomingLink.backToDapp({ url }).then((r) => {
+    // The dApp's app (its own link, the app that opened UP Wallet, or an app installed for its site),
+    // else the browser's task on the tab it was showing; when none can be opened, just the background.
+    IncomingLink.backToDapp({ url, site }).then((r) => {
       diag(r && r.ok ? `→ ${r.target} (${r.via})` : "→ background");
       if (!r || !r.ok) return App.minimizeApp();
     }).catch(() => App.minimizeApp().catch(() => null));

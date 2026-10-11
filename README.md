@@ -39,21 +39,25 @@ on the site.
 - UP Wallet announces its own link, `upwallet://`, in the WalletConnect metadata: a dApp that honours
   it opens UP Wallet (not another wallet app) when it sends a request. "Back to the dApp" goes to the
   dApp's own app when the dApp announced its link (`redirect.native`), else to the app that opened a
-  link to UP Wallet (Android's referrer), else to the default browser.
+  link to UP Wallet (Android's referrer), else to an app installed for the dApp's site (an installed
+  web app / PWA, or the site's own app: an app that opens the dApp's https address but not any
+  address, so browsers do not count), else to the default browser.
 - Panel 3 has a hint and a button to Android's settings of the "dApp requests" notifications: some
   phones (ColorOS among them) keep pop-up notifications off for apps installed from an APK.
 - A dApp request that arrives while UP Wallet is in the background shows a notification (Capacitor
   Local Notifications; Android asks for the permission when you connect MetaMask or a dApp): a tap
-  brings UP Wallet to the front. Once the dApp has its answer, a "Back to the dApp" button brings the
-  default browser back to the front, on the tab it was showing.
+  brings UP Wallet to the front. Once the dApp has its answer, a "Back to the dApp" button returns to
+  it as above (the default browser comes back on the tab it was showing).
 - While a dApp is connected, the app stays running (`KeepAliveService`, a foreground service of type
   dataSync with an ongoing notification): otherwise Android freezes it after a few minutes in the
   background and a dApp's request waits until UP Wallet is opened by hand. Stopped when no session is
   left. Android 15+ limits this service type to about 6 hours a day.
-- Send from the UP (the page's panel 6): the UP's balances (currency and tokens, from the chain and the
-  network's Blockscout index; `asset-list.js` is bundled), a recipient by address or by Universal
-  Profile name (LUKSO's profile index), the network's currency or an ERC-20 / LSP7 token, through the
-  same window, simulation and signature as dApp requests. After such a send there is no dApp to go
+- Send from the UP (the page's panel 6): the UP's balances (currency, tokens and NFTs, from the chain
+  and an index: Alchemy with the `ALCHEMY_KEY` secret, else Blockscout; `asset-list.js` is bundled;
+  spam-flagged ones on request), a recipient by address or by Universal Profile name (LUKSO's profile
+  index), the network's currency, an ERC-20 / LSP7 token or an NFT (LSP8, ERC-721, ERC-1155), with an
+  "All" button, through the same window, simulation and signature as dApp requests, and the result
+  read again on the chain after the send. After such a send there is no dApp to go
   back to: "Back to the dApp" stays hidden.
 - Panel 2 has no "Read the address from the UP extension" button: it needs the LUKSO browser
   extension, which a phone does not have. The address is typed or pasted, and remembered.
@@ -133,9 +137,10 @@ Open from the phone tests:
   until "Banner notifications" is turned on (the app now explains it and opens the setting).
   Battery usage "Unrestricted" is also advisable.
 - **hup.social (app)** opens the LUKSO UP app on each request (through its profile.link links), not
-  the connected wallet; the request reaches UP Wallet anyway (notification). To check whether hup
-  honours the `upwallet://` link UP Wallet now announces, and whether "Back to the dApp" returns to
-  hup's app.
+  the connected wallet; the request reaches UP Wallet anyway (notification). hup announces no app
+  link of its own and, with the WalletConnect link pasted, there is no referrer: up to 0.7.10 "Back to
+  the dApp" opened the browser. 0.7.11 looks for an app installed for hup's site first (to check on the
+  phone). Still to check: whether hup honours the `upwallet://` link UP Wallet announces.
 - **Way back from MetaMask**: after confirming, the user returns to UP Wallet by hand (MetaMask does
   not return to the calling app). Look for a MetaMask Connect option or a return link, if any.
 - **MetaMask cancels open requests when it locks** (auto-lock shorter than the time to read and
