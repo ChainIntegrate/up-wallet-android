@@ -21,6 +21,8 @@ import androidx.core.app.NotificationCompat;
 public class KeepAliveService extends Service {
     static final String CHANNEL = "keepalive";
     static final int ID = 4242;
+    static volatile boolean running = false;
+    static volatile String lastError = null;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -41,15 +43,34 @@ public class KeepAliveService extends Service {
                 .setContentIntent(tap)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
-        if (Build.VERSION.SDK_INT >= 29) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
-        else startForeground(ID, n);
+        // Android can refuse (a data sync service's daily time limit exhausted; Android 12+: app not in the
+        // foreground). Then the app goes on without it: no crash, the service stops. Android 14+ uses the
+        // "special use" type, which has no daily limit.
+        try {
+            if (Build.VERSION.SDK_INT >= 34) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            else if (Build.VERSION.SDK_INT >= 29) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            else startForeground(ID, n);
+            running = true;
+        } catch (Exception e) {
+            lastError = e.getClass().getSimpleName() + ": " + e.getMessage();
+            running = false;
+            stopSelf();
+        }
         return START_NOT_STICKY;
     }
 
-    /** Android 15+: a data sync service has a daily time limit; when it is reached the service stops. */
+    /** Android 15+: a data sync service (Android 10–13 here) has a daily time limit; when it is reached it stops. */
     @Override
     public void onTimeout(int startId, int fgsType) {
+        lastError = "time limit reached";
+        running = false;
         stopSelf();
+    }
+
+    @Override
+    public void onDestroy() {
+        running = false;
+        super.onDestroy();
     }
 
     @Override

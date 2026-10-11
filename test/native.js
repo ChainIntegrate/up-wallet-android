@@ -143,6 +143,17 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   });
   ck("while a dApp session is active the app stays running (one start, named by the dApp's host); stops when none is left",
     JSON.stringify(ka.calls) === JSON.stringify(["start: Collegato a opensea.io: UP Wallet resta attivo per ricevere le richieste.", "stop"]), JSON.stringify(ka.calls));
+  const refused = await p.evaluate(async () => {
+    window.__upwalletKeepAlive = { start: async () => null, stop: async () => null,
+      status: async () => ({ running: false, error: "ForegroundServiceStartNotAllowedException: Time limit already exhausted for foreground service type dataSync" }) };
+    const st = document.getElementById("wcStatus");
+    st.textContent = "✅ Sessione attiva con Hup (https://hup.social) — account presentato: 0x4a26 su chainId 42."; await new Promise((r) => setTimeout(r, 2300));
+    st.textContent = "Nessuna sessione."; await new Promise((r) => setTimeout(r, 30));
+    window.__upwalletKeepAlive = null;
+    return JSON.parse(localStorage.getItem("upwallet.diag")).join("\n");
+  });
+  ck("keep-alive refused by Android (daily time limit): the app goes on, and the log says why",
+    /Keep-alive: on \(hup\.social\)[\s\S]*Keep-alive non disponibile: ForegroundServiceStartNotAllowedException: Time limit/.test(refused), refused.slice(-400));
   ck("panel 3 suggests MetaMask's auto-lock at 5 minutes", ka.after === "connectSigner" && /Blocco automatico a 5 minuti/.test(ka.tip || ""), JSON.stringify(ka));
 
   // Diagnostic log: kept across restarts, shown under the page's log with Copy and Clear.

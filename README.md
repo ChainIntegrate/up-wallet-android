@@ -48,10 +48,14 @@ on the site.
   Local Notifications; Android asks for the permission when you connect MetaMask or a dApp): a tap
   brings UP Wallet to the front. Once the dApp has its answer, a "Back to the dApp" button returns to
   it as above (the default browser comes back on the tab it was showing).
-- While a dApp is connected, the app stays running (`KeepAliveService`, a foreground service of type
-  dataSync with an ongoing notification): otherwise Android freezes it after a few minutes in the
-  background and a dApp's request waits until UP Wallet is opened by hand. Stopped when no session is
-  left. Android 15+ limits this service type to about 6 hours a day.
+- While a dApp is connected, the app stays running (`KeepAliveService`, a foreground service with an
+  ongoing notification): otherwise Android freezes it after a few minutes in the background and a
+  dApp's request waits until UP Wallet is opened by hand. Stopped when no session is left. Type
+  "special use" on Android 14+ (no daily limit), dataSync before. Up to 0.7.11 it was dataSync
+  everywhere: on Android 15+ that type has a limit of about 6 hours a day, and once it was used up,
+  starting the service crashed the app (seen when tapping Connect with a session to restore). Since
+  0.7.12 a refused service no longer crashes the app: it goes on without it, and the diagnostic log
+  says "Keep-alive not available" with Android's reason.
 - Send from the UP (the page's panel 6): the UP's balances (currency, tokens and NFTs, from the chain
   and an index: Alchemy with the `ALCHEMY_KEY` secret, else Blockscout; `asset-list.js` is bundled;
   spam-flagged ones on request), a recipient by address or by Universal Profile name (LUKSO's profile
@@ -177,4 +181,6 @@ notices in place. Before a Play Store release:
 - optionally a separate Reown project for the app (own quota and statistics);
 - **licenses**: MetaMask Connect allows non-commercial use or up to 10,000 monthly active users;
   beyond that, a license from ConsenSys or another library (THIRD_PARTY_NOTICES.md);
-- remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests).
+- remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests);
+- the "special use" foreground service (`KeepAliveService`, Android 14+) needs a declaration in the
+  Play Console explaining the use (the text is in the manifest's `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`).

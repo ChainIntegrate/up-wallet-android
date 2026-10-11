@@ -179,6 +179,10 @@ function keepAlive(who) {
   const k = window.__upwalletKeepAlive || (native() ? KeepAlive : null);   // __upwalletKeepAlive: tests
   if (!k) return;
   (who ? k.start({ text: N.keep(who), channel: N.keepChannel() }) : k.stop()).catch?.((e) => diag("Keep-alive failed: " + (e && e.message)));
+  // Android may refuse the service after it started (e.g. its daily time limit): say so in the log.
+  if (who && k.status) setTimeout(() => k.status().then((s) => {
+    if (s && !s.running && keptFor === who) diag((en() ? "Keep-alive not available: " : "Keep-alive non disponibile: ") + (s.error || "?"));
+  }).catch(() => null), 2000);
 }
 
 // The dApp's own app link, when the connected dApp announced one to WalletConnect (redirect.native,

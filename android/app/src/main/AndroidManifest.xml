@@ -48,11 +48,17 @@
 
         </activity>
 
-        <!-- Keeps the app running while a dApp is connected (see KeepAliveService). -->
+        <!-- Keeps the app running while a dApp is connected (see KeepAliveService). Android 14+:
+             "special use" (no daily time limit; dataSync has about 6 hours a day on Android 15+);
+             older versions: dataSync. -->
         <service
             android:name=".KeepAliveService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the WalletConnect connection with a dApp open, so that the dApp's signature and transaction requests reach the wallet and are shown to the user as notifications." />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -84,4 +90,5 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 </manifest>
