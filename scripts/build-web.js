@@ -24,7 +24,7 @@ const appConfig = JSON.parse(fs.readFileSync(path.join(ROOT, "app-config.json"),
 
 // The page and the files it loads from the site. Anything else it links to opens in the phone's browser.
 const PAGE = "up-wallet.html";
-const FILES = [PAGE, "theme.js", "chains.js", "backup-check.js", "gas-relay-client.js",
+const FILES = [PAGE, "theme.js", "chains.js", "asset-list.js", "backup-check.js", "gas-relay-client.js",
   "vendor/walletkit-1.6.0.min.js", "banner.png", "logo.png", "favicon.ico"];
 const ETHERS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js";
 const ETHERS_LOCAL = "vendor/ethers-6.13.4.umd.min.js";
