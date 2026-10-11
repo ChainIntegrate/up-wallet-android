@@ -5,16 +5,19 @@ built with Capacitor. The page is bundled in the app, taken from Cross_Chain at 
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
 Status: **prototype, phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea, Uniswap and
-hup.social on Base and Arc: the app installs, shows the page, uses MetaMask mobile to sign, connects
-to dApps through WalletConnect links (pasted, opened with the app or shared to it), has the site
-relayer pay the gas, notifies dApp requests that arrive in the background, stays running while a dApp
-is connected and goes back to the browser. APKs are signed with the release key (section Signing).
-No store release yet. See "Still to do" below.
+hup.social on Base, Arc and LUKSO: the app installs, shows the page, uses MetaMask mobile to sign,
+connects to dApps through WalletConnect links (pasted, opened with the app or shared to it), has the
+site relayer pay the gas, notifies dApp requests that arrive in the background, stays running while a
+dApp is connected and goes back to the dApp. Sending from the UP (currency, tokens, NFTs) was tested
+on Base, Polygon and LUKSO. APKs are signed with the release key (section Signing). No store release
+yet. See "Still to do" below.
 
 **Download**: the APK of each version is attached to its
 [release](https://github.com/ChainIntegrate/up-wallet-android/releases). On the phone, open the
-`.apk` and allow installing from that source when Android asks. You need MetaMask mobile, with your
-Universal Profile's controller account in it.
+`.apk` and allow installing from that source when Android asks; if Play Protect warns that the app is
+unknown, choose "More details" → "Install anyway" (the app is not on the Play Store). Updates install
+over the previous version, keeping its data. You need MetaMask mobile, with your Universal Profile's
+controller account in it. The site's guide has the same steps.
 
 Privacy policy: [up-wallet-app-privacy.html](https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html)
 on the site.
@@ -31,7 +34,8 @@ on the site.
   announced to the page through EIP-6963 as "MetaMask (app)", the way the browser extension is, and
   backed by MetaMask Connect (`@metamask/connect-evm`), which reaches the MetaMask app through
   MetaMask's relay and opens it with `metamask://` links for each confirmation. Analytics are off.
-  The page code does not change.
+  Networks MetaMask does not know (LUKSO among them) are added with their parameters from `chains.js`
+  when the page switches to them. The page code does not change.
 - `app/native.js` (bundled): a Paste button for the WalletConnect link; a `wc:` link opened with the
   app or text shared to it (Share -> UP Wallet) is put in the link field (the native side is
   `IncomingLinkPlugin.java`); connecting still takes a tap on the page's button. The UP address and
@@ -107,7 +111,7 @@ The app holds no keys: signing stays in MetaMask. Backups of app data are off (`
   ```
   npm ci
   npm run web            # or: CROSS_CHAIN_DIR=../Cross_Chain npm run web (that checkout must be at the pinned commit)
-  npm test               # layout at phone width (needs Playwright)
+  npm test               # phone layout, MetaMask, native features (needs Playwright and Chromium)
   npx cap sync android
   cd android && ./gradlew assembleDebug    # signed with this machine's debug key
   ```
@@ -142,9 +146,11 @@ Open from the phone tests:
   Battery usage "Unrestricted" is also advisable.
 - **hup.social (app)** opens the LUKSO UP app on each request (through its profile.link links), not
   the connected wallet; the request reaches UP Wallet anyway (notification). hup announces no app
-  link of its own and, with the WalletConnect link pasted, there is no referrer: up to 0.7.10 "Back to
-  the dApp" opened the browser. 0.7.11 looks for an app installed for hup's site first (to check on the
-  phone). Still to check: whether hup honours the `upwallet://` link UP Wallet announces.
+  link of its own and, with the WalletConnect link pasted, there is no referrer. 0.7.11 looks for an
+  app installed for hup's site first; on the test phone hup runs in Chrome, so "Back to the dApp"
+  returns to Chrome, which is where hup is. Still to check: whether hup honours the `upwallet://` link
+  UP Wallet announces, and whether sharing hup's link to UP Wallet (instead of pasting it) gives a
+  referrer.
 - **Way back from MetaMask**: after confirming, the user returns to UP Wallet by hand (MetaMask does
   not return to the calling app). Look for a MetaMask Connect option or a return link, if any.
 - **MetaMask cancels open requests when it locks** (auto-lock shorter than the time to read and
