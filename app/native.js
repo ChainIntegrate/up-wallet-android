@@ -147,6 +147,8 @@ const N = {
 // The dApp's site as shown in the page's lines ("Name (https://site)"): its host, short and verified.
 const hostOf = (url) => { try { return new URL(url).host.replace(/^www\./, ""); } catch (e) { return ""; } };
 const REQ = /^(?:Richiesta dalla dApp|Request from the dApp): (\S+)/;
+// A send from the UP (panel 4) has no dApp to go back to: its outcome must not show the button.
+const LOCAL = /^(?:Invio dalla UP|Send from the UP): /;
 const PROP = /^(?:Richiesta di connessione da|Connection request from): (.+?) \((https?:\/\/[^)\s]+)\)/;
 const SESSION = /(?:Sessione attiva con|Session active with) (.+?) \((https?:\/\/[^)\s]+)\)/;
 const DONE = /Firma inviata alla dApp|Signature sent to the dApp|Operazione eseguita|Operation done|Transazione confermata|Transaction confirmed|Modalità simulazione: niente inviato|Simulation mode: nothing sent|^Richiesta rifiutata|^Request rejected|^❌/;
@@ -225,11 +227,13 @@ function addBackButton() {
 }
 
 function watchPage() {
+  let local = false;
   const onLine = (t) => {
     let m;
-    if ((m = t.match(PROP))) { dappName = hostOf(m[2]) || m[1]; showBack(false); notify(N.connect()); }
-    else if ((m = t.match(REQ))) { showBack(false); notify(/sendTransaction/.test(m[1]) ? N.tx() : N.sign()); }
-    else if (DONE.test(t)) showBack(true);
+    if ((m = t.match(PROP))) { local = false; dappName = hostOf(m[2]) || m[1]; showBack(false); notify(N.connect()); }
+    else if ((m = t.match(REQ))) { local = false; showBack(false); notify(/sendTransaction/.test(m[1]) ? N.tx() : N.sign()); }
+    else if (LOCAL.test(t)) { local = true; showBack(false); }
+    else if (DONE.test(t) && !local) showBack(true);
   };
   const log = $("log");
   if (log) new MutationObserver((muts) => { for (const mu of muts) for (const n of mu.addedNodes) onLine((n.textContent || "").trim()); }).observe(log, { childList: true });

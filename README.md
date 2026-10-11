@@ -50,6 +50,9 @@ on the site.
   dataSync with an ongoing notification): otherwise Android freezes it after a few minutes in the
   background and a dApp's request waits until UP Wallet is opened by hand. Stopped when no session is
   left. Android 15+ limits this service type to about 6 hours a day.
+- Send from the UP (the page's panel 4, from Cross_Chain 36c7748): the network's currency or an ERC-20 /
+  LSP7 token, through the same window, simulation and signature as dApp requests. After such a send
+  there is no dApp to go back to: "Back to the dApp" stays hidden.
 - Panel 2 has no "Read the address from the UP extension" button: it needs the LUKSO browser
   extension, which a phone does not have. The address is typed or pasted, and remembered.
 - Under the page's footer, the notice MetaMask Connect's license asks for, with links to the

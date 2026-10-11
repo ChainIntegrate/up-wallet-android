@@ -110,15 +110,22 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
     const shownAgain = !btn.hidden;
     line("Richiesta dalla dApp: personal_sign"); await tick();
     const hiddenOnNew = btn.hidden;
+    line("Invio dalla UP: 0.01 LYX a 0x8888888888888888888888888888888888888888"); await tick();
+    line("✅✅ Transazione confermata."); await tick();
+    const hiddenAfterLocal = btn.hidden;
+    line("Richiesta dalla dApp: eth_sendTransaction"); await tick();
+    line("✅ Operazione eseguita."); await tick();
+    const shownAfterDapp = !btn.hidden;
     window.__upwalletNotify = null; window.__upwalletMinimize = null;
     delete document.hidden;
-    return { sent, mins: mins.length, before, shown, text, afterClick, shownAgain, hiddenOnNew };
+    return { sent, mins: mins.length, before, shown, text, afterClick, shownAgain, hiddenOnNew, hiddenAfterLocal, shownAfterDapp };
   });
   ck("in the background, each dApp request shows a notification naming the dApp and what it asks",
     JSON.stringify(nb.sent) === JSON.stringify(["opensea.io chiede di collegarsi: tocca per aprire UP Wallet.", "opensea.io chiede una firma: tocca per aprire UP Wallet.", "opensea.io chiede una transazione: tocca per aprire UP Wallet."]), JSON.stringify(nb.sent));
   ck("no notification when UP Wallet is already in the foreground", nb.sent.length === 3);
   ck("\"Back to the dApp\" appears once the dApp has its answer (signature sent, operation done), and hides on a new request",
     nb.before && nb.shown && nb.text === "↩ Torna alla dApp" && nb.afterClick && nb.shownAgain && nb.hiddenOnNew, JSON.stringify(nb));
+  ck("a send from the UP (no dApp): no \"Back to the dApp\" after it; a dApp request after it shows it again", nb.hiddenAfterLocal && nb.shownAfterDapp, JSON.stringify(nb));
   ck("\"Back to the dApp\" puts UP Wallet in the background", nb.mins === 1);
 
   // Keep-alive while a dApp session is active; the MetaMask auto-lock tip.
