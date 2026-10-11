@@ -69,6 +69,10 @@ on the site.
   answered "connection not found" to the old one).
 - ethers is bundled from the npm package, checked against the page's own SRI hash; nothing is loaded
   from a CDN.
+- The Alchemy API key (token lists in the send panel) is the site's, given to the build as the
+  `ALCHEMY_KEY` repository secret and never stored in the repository. Like on the site it is protected
+  by Alchemy's allowed-origins list (which must include `upwallet.chainintegrate.it`), not by being
+  secret. Without it the token lists come from Blockscout only, which misses some tokens.
 - `config.js` is generated from `app-config.json` (WalletConnect Project ID; on cloud.reown.com the
   project's allowed domains include `upwallet.chainintegrate.it`, the app's origin).
 - The app's origin is `https://upwallet.chainintegrate.it` (`server.hostname` in `capacitor.config.json`):

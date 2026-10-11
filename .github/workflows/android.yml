@@ -32,6 +32,8 @@ jobs:
         run: npm ci
 
       - name: Web content from Cross_Chain at the pinned commit
+        env:
+          ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}   # optional: token lists from Alchemy (see scripts/build-web.js)
         run: npm run web
 
       # Installing Chromium and its system packages once hung until the job's 30-minute limit:
