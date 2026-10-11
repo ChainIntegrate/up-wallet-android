@@ -148,7 +148,8 @@ Open from the phone tests:
   the connected wallet; the request reaches UP Wallet anyway (notification). hup announces no app
   link of its own and, with the WalletConnect link pasted, there is no referrer. 0.7.11 looks for an
   app installed for hup's site first; on the test phone hup runs in Chrome, so "Back to the dApp"
-  returns to Chrome, which is where hup is. Still to check: whether hup honours the `upwallet://` link
+  returns to Chrome, which is where hup is (confirmed on 0.7.12). Since 0.7.13 the request window
+  decodes hup's posts, replies and likes on LUKSO too, LSP26 follows and hup's chat sign-in. Still to check: whether hup honours the `upwallet://` link
   UP Wallet announces, and whether sharing hup's link to UP Wallet (instead of pasting it) gives a
   referrer.
 - **Way back from MetaMask**: after confirming, the user returns to UP Wallet by hand (MetaMask does
