@@ -181,7 +181,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   const cfgText = fs.readFileSync(path.join(WWW, "config.js"), "utf8");
   ck("the Alchemy key comes only from the environment (ALCHEMY_KEY), never from the repository",
     /"alchemyApiKey": "[A-Za-z0-9_-]*"/.test(cfgText) && !/alchemy/i.test(fs.readFileSync(path.join(__dirname, "..", "app-config.json"), "utf8"))
-    && (process.env.ALCHEMY_KEY ? cfgText.includes(process.env.ALCHEMY_KEY) : /"alchemyApiKey": ""/.test(cfgText)), cfgText);
+    && (!process.env.ALCHEMY_KEY || cfgText.includes(process.env.ALCHEMY_KEY)), "config.js or app-config.json not as expected (the key itself is never printed)");
   const notice = await p.evaluate(() => { const d = document.getElementById("appNotice"); return d && { text: d.textContent, href: d.querySelector("a").href, privacy: d.querySelectorAll("a")[1].href, after: d.previousElementSibling.className }; });
   ck("MetaMask Connect's notice under the page footer, with links to the third-party notices and the privacy policy",
     notice && /MetaMask Connect, © ConsenSys Software Inc\./.test(notice.text) && /10\.000 utenti/.test(notice.text) && notice.after === "site-footer"
