@@ -130,6 +130,16 @@ Without the secrets (pull requests from forks, local builds) the build makes a d
 installed app. Keep a copy of the release key offline: without it, no update of the installed app is
 possible (users would have to uninstall and lose the app's data).
 
+## Security reviews
+
+The app was in the scope of the AI-assisted review of 2026-10-12 (Cross_Chain `AUDIT.md`, section 13):
+manifest, the Java plugins and the native bridge (`app/*.js`). No finding on the app's own code beyond
+two Info items: the `uuid` advisory reaching the app through `@metamask/connect-evm` (no upstream fix
+yet; negligible for this use), and "Back to the dApp" opening a link the dApp announces (a plain VIEW
+intent, only on the user's tap, with dangerous schemes filtered). The High found in that review (W-H1:
+32-byte signatures refused only on the chosen network) was in the bundled page; the app carries the fix
+from 0.7.15. Not a professional audit.
+
 ## License
 
 MIT for this repository's code ([LICENSE](LICENSE)). The APK also contains third-party code under
