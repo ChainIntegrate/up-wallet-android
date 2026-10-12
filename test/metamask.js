@@ -22,7 +22,7 @@ async function page(b, bundle) {
   await p.route("**/*", (r) => {
     const u = new URL(r.request().url());
     // RPCs of Base and Polygon: they answer their chain id; the UP has no code (the check stops after the wallet).
-    const RPC = { "base-rpc.publicnode.com": "0x2105", "polygon.drpc.org": "0x89", "rpc.mainnet.lukso.network": "0x2a" };
+    const RPC = { "base-rpc.publicnode.com": "0x2105", "polygon-bor-rpc.publicnode.com": "0x89", "rpc.mainnet.lukso.network": "0x2a" };
     if (RPC[u.host]) {
       const q = JSON.parse(r.request().postData() || "{}");
       const one = (x) => ({ jsonrpc: "2.0", id: x.id, result: x.method === "eth_chainId" ? RPC[u.host] : "0x" });
