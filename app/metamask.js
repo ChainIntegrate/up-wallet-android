@@ -48,6 +48,7 @@ const MAIN_CHAINS = ["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"];   // Base, Po
 // MetaMask Connect may ask to open the same link twice for one request (two code paths); opening it
 // again made MetaMask show the same request more than once. The same link within 5 s is opened once.
 let lastLink = { url: null, at: 0 };
+let opens = 0;   // MetaMask openings so far: a connection that opened none was resumed from storage
 // Each opening is noted in the page's log (prototype: to tell apart repeated requests from MetaMask).
 function note(text) {
   const log = document.getElementById("log");
@@ -68,6 +69,7 @@ function openLink(url) {
     return;
   }
   lastLink = { url, at: now };
+  opens++;
   note(en ? `MetaMask opened (${what}).` : `Apertura di MetaMask (${what === "request" ? "richiesta" : "collegamento"}).`);
   if (!Capacitor.isNativePlatform()) { (window.__upwalletOpenLink || ((u) => { window.location.href = u; }))(url); return; }   // web: tests
   AppLauncher.openUrl({ url }).then((r) => {
@@ -80,10 +82,16 @@ function openLink(url) {
 // The networks of the last approved connection. A connection kept by MetaMask Connect for fewer
 // networks than asked now is not reused: MetaMask may no longer know it ("connection not found").
 const CHAINS_KEY = "upwallet.metamask.chains";
+// Set by "Connect MetaMask from scratch": the stored connection is dropped at the next start, whatever its networks.
+const RESET_KEY = "upwallet.metamask.reset";
 const approvedChains = () => { try { return JSON.parse(localStorage.getItem(CHAINS_KEY)) || []; } catch (e) { return []; } };
+const resetAsked = () => { try { return localStorage.getItem(RESET_KEY) === "1"; } catch (e) { return false; } };
 async function dropOldConnection(want) {
   const had = approvedChains();
-  if (want.every((c) => had.includes(c))) return;
+  const reset = resetAsked();
+  try { localStorage.removeItem(RESET_KEY); } catch (e) { /* nothing stored */ }
+  if (reset) diag("MetaMask: stored connection dropped (connect from scratch)");
+  else if (want.every((c) => had.includes(c))) return;
   try {
     const dbs = indexedDB.databases ? await indexedDB.databases() : [];
     await Promise.all(dbs.filter((d) => d.name && d.name.startsWith("mmconnect")).map((d) => new Promise((ok) => {
@@ -119,6 +127,51 @@ function start() {
 
 let connected = false;
 
+// A connection removed in MetaMask (Settings → connected apps) stays stored here: MetaMask Connect resumes
+// it without opening MetaMask, and requests then never reach MetaMask. MetaMask cannot be asked whether it
+// still knows the connection without opening it, so the person can start over: the stored connection is
+// dropped and the page reloaded (network and UP are kept by native.js; dApp sessions by WalletConnect).
+const SILENT_MS = () => window.__upwalletSilentMs || 15000;
+function fromScratch() {
+  try { localStorage.setItem(RESET_KEY, "1"); localStorage.removeItem(CHAINS_KEY); } catch (e) { /* not kept */ }
+  diag("MetaMask: connect from scratch asked");
+  (window.__upwalletReload || (() => window.location.reload()))();
+}
+const T = {
+  btn: () => (document.documentElement.lang === "en" ? "Connect MetaMask from scratch" : "Collega MetaMask da capo"),
+  silent: () => (document.documentElement.lang === "en"
+    ? "MetaMask has not opened. If you removed this app from MetaMask's connected apps, the connection stored here is no longer valid: use \"Connect MetaMask from scratch\"."
+    : "MetaMask non si è aperto. Se hai tolto questa app dalle app collegate di MetaMask, il collegamento salvato qui non vale più: usa \"Collega MetaMask da capo\"."),
+  resumed: () => (document.documentElement.lang === "en"
+    ? "MetaMask: connection resumed from before, without opening MetaMask. If you removed this app from MetaMask's connected apps, or requests do not reach MetaMask, use \"Connect MetaMask from scratch\"."
+    : "MetaMask: collegamento ripreso da prima, senza aprire MetaMask. Se hai tolto questa app dalle app collegate di MetaMask, o le richieste non arrivano a MetaMask, usa \"Collega MetaMask da capo\"."),
+};
+function resetButton() {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "secondary"; b.style.marginTop = "6px";
+  b.textContent = T.btn();
+  b.addEventListener("click", fromScratch);
+  return b;
+}
+// Under "Connect MetaMask", once a connection exists.
+function showResetButton() {
+  const signer = document.getElementById("connectSigner");
+  if (!signer || document.getElementById("mmFromScratch")) return;
+  const b = resetButton(); b.id = "mmFromScratch";
+  new MutationObserver(() => { b.textContent = T.btn(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+  signer.insertAdjacentElement("afterend", b);
+}
+function noteResumed(silent) {
+  const log = document.getElementById("log");
+  diag(silent ? "MetaMask: connection pending, MetaMask not opened" : "MetaMask: connection resumed without opening MetaMask");
+  if (!log) return;
+  const d = document.createElement("div");
+  d.className = "line-warn";
+  d.textContent = `${new Date().toLocaleTimeString()} ${silent ? T.silent() : T.resumed()} `;
+  d.appendChild(resetButton());
+  log.appendChild(d);
+}
+
 // With MetaMask Connect the network is chosen by the app, not in MetaMask: the connection is made
 // for the chosen network (plus the main ones), and it follows the network chosen in the page.
 async function follow() {
@@ -144,6 +197,10 @@ async function requestInner(args) {
   const c = client || await start();
   if (args && (args.method === "eth_requestAccounts" || args.method === "wallet_requestPermissions")) {
     let chainIds = wantedChains();
+    const opens0 = opens;
+    // A connect that has opened nothing after a while: the stored connection is likely gone in MetaMask.
+    let warned = false;
+    const silentTimer = setTimeout(() => { if (opens === opens0) { warned = true; noteResumed(true); showResetButton(); } }, SILENT_MS());
     let r;
     try {
       r = await c.connect({ chainIds });
@@ -154,8 +211,10 @@ async function requestInner(args) {
       diag(`MetaMask: connection for ${chainIds[0]} refused (${(e.message || "").slice(0, 60)}), retried for the main networks`);
       chainIds = [...MAIN_CHAINS];
       r = await c.connect({ chainIds });
-    }
+    } finally { clearTimeout(silentTimer); }
     connected = true;
+    showResetButton();
+    if (opens === opens0 && !warned) noteResumed();
     try { localStorage.setItem(CHAINS_KEY, JSON.stringify([...new Set([...approvedChains(), ...chainIds])])); } catch (e) { /* not kept */ }
     await follow();
     return args.method === "eth_requestAccounts" ? r.accounts : c.getProvider().request(args);

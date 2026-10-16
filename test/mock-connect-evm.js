@@ -23,6 +23,10 @@ export async function createEVMClient(options) {
     // brings back the network remembered from before, right after connect() has answered.
     async connect({ chainIds }) {
       window.__mm.connects.push(chainIds);
+      // window.__mmOpens: a connection that opens MetaMask (a new one, or one MetaMask must confirm).
+      if (window.__mmOpens) options.mobile.preferredOpenLink("metamask://connect?id=" + window.__mm.connects.length, "_self");
+      // window.__mmHang: a connection stored here but removed in MetaMask: no answer, MetaMask not opened.
+      if (window.__mmHang) return new Promise(() => {});
       // window.__mmUnknown: a network MetaMask does not have; a connection naming it is refused.
       if (window.__mmUnknown && chainIds.includes(window.__mmUnknown)) throw Object.assign(new Error("Unrecognized chain ID " + window.__mmUnknown), { code: -32603 });
       chain = chainIds[0];

@@ -166,6 +166,50 @@ async function page(b, bundle) {
   ck("no page errors (LUKSO)", !errs.length, errs.join("\n"));
   await p.close();
 
+  // A connection removed in MetaMask but still stored here: "Connect MetaMask from scratch".
+  ({ p, errs } = await page(b, mockBundle));
+  await p.evaluate(() => { localStorage.setItem("upwallet.metamask.chains", JSON.stringify(["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"])); });
+  await p.selectOption("#network", "base");
+  await p.fill("#upAddress", "0x4a2605796e0d91A9667d6E30365aEEC384C48c27");
+  await p.click("#connectSigner");
+  await p.waitForFunction(() => document.getElementById("mmFromScratch"), null, { timeout: 5000 }).catch(() => null);
+  let rs = await p.evaluate(() => ({ warn: [...document.querySelectorAll("#log .line-warn")].map((e) => e.textContent).join("\n"), btn: !!document.getElementById("mmFromScratch"), inLog: document.querySelectorAll("#log .line-warn button").length }));
+  ck("a connection resumed without opening MetaMask: noted in the log with the way out, and a \"from scratch\" button under Connect MetaMask",
+    /collegamento ripreso da prima, senza aprire MetaMask/.test(rs.warn) && /Collega MetaMask da capo/.test(rs.warn) && rs.btn && rs.inLog === 1, JSON.stringify(rs));
+  await p.evaluate(() => new Promise((ok) => { const r = indexedDB.open("mmconnect-kv-store", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => { r.result.close(); ok(); }; }));
+  await Promise.all([p.waitForNavigation(), p.click("#mmFromScratch")]);
+  await p.waitForFunction(() => typeof ethers !== "undefined" && document.getElementById("connectSigner"));
+  rs = await p.evaluate(() => ({ flag: localStorage.getItem("upwallet.metamask.reset"), chains: localStorage.getItem("upwallet.metamask.chains"), mm: !!window.__mm }));
+  ck("from scratch: the page reloads with the stored connection marked to be dropped, nothing started yet", rs.flag === "1" && rs.chains === null && !rs.mm, JSON.stringify(rs));
+  await p.evaluate(() => { window.__mmOpens = true; window.__upwalletOpenLink = (u) => (window.__opened = (window.__opened || []).concat(u)); });
+  await p.selectOption("#network", "base");
+  await p.fill("#upAddress", "0x4a2605796e0d91A9667d6E30365aEEC384C48c27");
+  await p.click("#connectSigner");
+  await p.waitForFunction(() => window.__mm && window.__mm.connects.length && document.getElementById("mmFromScratch"), null, { timeout: 5000 }).catch(() => null);
+  await p.waitForTimeout(300);
+  rs = await p.evaluate(async () => ({ dbs: (await indexedDB.databases()).map((d) => d.name), flag: localStorage.getItem("upwallet.metamask.reset"), opened: window.__opened || [],
+    warn: [...document.querySelectorAll("#log .line-warn")].map((e) => e.textContent).join("\n"), diag: JSON.parse(localStorage.getItem("upwallet.diag") || "[]").filter((l) => /from scratch/.test(l)).join("\n") }));
+  ck("after the reload, Connect MetaMask drops the stored connection first, then a new one opens MetaMask",
+    !rs.dbs.includes("mmconnect-kv-store") && rs.flag === null && rs.opened.length === 1 && /dropped \(connect from scratch\)/.test(rs.diag), JSON.stringify(rs));
+  ck("a connection that opened MetaMask: no \"resumed\" warning", !/ripreso da prima|non si è aperto/.test(rs.warn), rs.warn);
+  ck("no page errors (from scratch)", !errs.length, errs.join("\n"));
+  await p.close();
+
+  // A stored connection MetaMask no longer answers: after a while, the same way out is offered.
+  ({ p, errs } = await page(b, mockBundle));
+  await p.evaluate(() => { localStorage.setItem("upwallet.metamask.chains", JSON.stringify(["0x2105", "0x89", "0xa4b1", "0xa86a", "0x1"])); window.__mmHang = true; window.__upwalletSilentMs = 300; });
+  await p.selectOption("#network", "base");
+  await p.fill("#upAddress", "0x4a2605796e0d91A9667d6E30365aEEC384C48c27");
+  await p.click("#connectSigner");
+  await p.waitForFunction(() => document.getElementById("mmFromScratch"), null, { timeout: 5000 }).catch(() => null);
+  rs = await p.evaluate(() => ({ warn: [...document.querySelectorAll("#log .line-warn")].map((e) => e.textContent).join("\n"), btn: !!document.getElementById("mmFromScratch") }));
+  ck("Connect MetaMask that gets no answer and opens nothing: \"MetaMask has not opened\" with the from-scratch button",
+    /MetaMask non si è aperto/.test(rs.warn) && rs.btn, JSON.stringify(rs));
+  await p.click("#langToggle"); await p.waitForTimeout(100);
+  ck("the from-scratch button follows the language", (await p.$eval("#mmFromScratch", (e) => e.textContent)) === "Connect MetaMask from scratch");
+  ck("no page errors (no answer)", !errs.length, errs.join("\n"));
+  await p.close();
+
   ({ p, errs } = await page(b, null));
   const real = await p.evaluate(() => new Promise((ok) => {
     const got = [];

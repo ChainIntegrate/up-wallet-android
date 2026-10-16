@@ -92,6 +92,11 @@ on the site.
   `localhost` is no longer in the allowlist: older builds (origin `https://localhost`) cannot connect to dApps.
 - A MetaMask connection resumed from storage may bring back the network used before; before each request
   the connection is put back on the page's network when that network is approved (a local change).
+- A MetaMask connection removed in MetaMask (its connected apps) stays stored in the app, and MetaMask
+  Connect resumes it without opening MetaMask: requests then never reach MetaMask. When Connect MetaMask
+  resumes a connection without opening MetaMask, or opens nothing for 15 s, the log says so, and a
+  "Connect MetaMask from scratch" button (under Connect MetaMask) drops the stored connection and reloads
+  the page; network and UP are kept, dApp sessions too. The next Connect MetaMask makes a new connection.
 
 The app holds no keys: signing stays in MetaMask. Backups of app data are off (`allowBackup="false"`).
 
