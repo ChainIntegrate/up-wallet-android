@@ -26,6 +26,15 @@ const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${
   await p.goto("https://localhost/");
   await p.waitForFunction(() => location.pathname === "/up-wallet.html" && typeof ethers !== "undefined" && document.querySelector("#requestModal"));
   await p.waitForTimeout(300);
+  // First start: the warnings window fits the phone, its buttons on screen without scrolling the page.
+  const risk = await p.evaluate(() => {
+    const W = document.documentElement.clientWidth, H = window.innerHeight, m = document.getElementById("riskModal");
+    const ok = document.getElementById("riskOk").getBoundingClientRect(), box = m.querySelector(".modal").getBoundingClientRect();
+    return { open: !m.hidden, fits: box.left >= 0 && box.right <= W + 1 && box.top >= 0 && box.bottom <= H + 1, okOnScreen: ok.top >= 0 && ok.bottom <= H + 1, W, H };
+  });
+  ck("first start: the warnings open in a window that fits the phone screen, Continue visible without scrolling", risk.open && risk.fits && risk.okOnScreen, JSON.stringify(risk));
+  await p.click("#riskLater");
+  ck("in the app the messages list shows only the last message", await p.evaluate(() => document.getElementById("log").classList.contains("last-only")));
   ck("index.html opens the wallet page; ethers, the page scripts and the app shim are loaded",
     await p.evaluate(() => document.documentElement.classList.contains("in-app") && typeof GasRelayClient !== "undefined" && typeof CHAINS !== "undefined"));
   ck("no request to a CDN: everything the page loads is in the app",
@@ -62,7 +71,17 @@ const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${
   ck("a link to another page of the site opens that page on the site", href === SITE + "up-crosschain-guide.html#wallet", href);
 
   ck("no button to read the address from the UP extension (there is no extension on a phone); the address field stays",
-    await p.evaluate(() => getComputedStyle(document.getElementById("connectUp")).display === "none" && !!document.getElementById("upAddress").offsetParent));
+    await p.evaluate(() => { showView("settings", false); return getComputedStyle(document.getElementById("connectUp")).display === "none" && !!document.getElementById("upAddress").offsetParent; }));
+  // The menu on a phone: the six buttons two per row, nothing wider than the screen; the network logos are in the app.
+  const menu = await p.evaluate(async () => {
+    showView("home", false);
+    const W = document.documentElement.clientWidth, tiles = [...document.querySelectorAll(".tile")].map((t) => t.getBoundingClientRect());
+    const rows = new Set(tiles.map((r) => Math.round(r.top))).size;
+    const img = document.querySelector("#netPicker img");
+    const ok = img ? await new Promise((r) => { if (img.complete) return r(img.naturalWidth > 0); img.onload = () => r(true); img.onerror = () => r(false); }) : false;
+    return { n: tiles.length, rows, fits: tiles.every((r) => r.left >= 0 && r.right <= W + 1), logo: ok, src: img && img.src };
+  });
+  ck("menu on the phone: six buttons in three rows of two, within the screen; network logos load from the app", menu.n === 6 && menu.rows === 3 && menu.fits && menu.logo, JSON.stringify(menu));
   ck("no page errors", !errs.length, errs.join("\n"));
   await b.close();
   console.log(res.join("\n"));

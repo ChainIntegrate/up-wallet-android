@@ -21,6 +21,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
     if (!fs.existsSync(f)) return r.fulfill({ status: 404, body: "" });
     r.fulfill({ body: fs.readFileSync(f), contentType: TYPES[path.extname(f)] || "application/octet-stream" });
   });
+  await ctx.addInitScript(() => { try { localStorage.setItem("upwallet.riskAccepted", "1"); localStorage.setItem("upwallet.view", "all"); } catch (e) { /* none */ } });   // warnings accepted, full view
   let p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
   p.on("dialog", (d) => { errs.push("dialog: " + d.message()); d.dismiss(); });
   await p.goto("https://localhost/up-wallet.html");
