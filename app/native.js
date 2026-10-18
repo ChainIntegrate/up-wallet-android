@@ -1,5 +1,8 @@
 // UP Wallet app: what the phone adds around the page, without changing it.
 // - "Paste" next to the WalletConnect link field (the system clipboard, through Capacitor).
+// - "Scan QR" next to it, for a dApp open on another screen that shows its QR code: Google Play services'
+//   code scanner (ML Kit, on the phone) handles the camera, so the app asks for no camera permission and
+//   receives only the text of the code; the link found in it goes in the field like a pasted one.
 // - A wc: link that another app opens with UP Wallet, or text shared to it (Share -> UP Wallet): the
 //   link is put in the field, ready; connecting still takes the user's tap on the page's button.
 // - The UP address and the network are remembered on this phone and filled in at the next start.
@@ -20,6 +23,7 @@ import { Clipboard } from "@capacitor/clipboard";
 import { Capacitor, CapacitorHttp, registerPlugin } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { App } from "@capacitor/app";
+import { BarcodeScanner, BarcodeFormat } from "@capacitor-mlkit/barcode-scanning";
 
 const IncomingLink = registerPlugin("IncomingLink");
 const KeepAlive = registerPlugin("KeepAlive");
@@ -57,6 +61,10 @@ const $ = (id) => document.getElementById(id);
 const en = () => document.documentElement.lang === "en";
 const T = {
   paste: () => (en() ? "Paste" : "Incolla"),
+  scan: () => (en() ? "Scan QR" : "Scansiona QR"),
+  scanNoLink: () => (en() ? "This QR code has no WalletConnect link (wc:...): scan the dApp's WalletConnect code." : "Questo QR non contiene un link WalletConnect (wc:...): inquadra il QR WalletConnect della dApp."),
+  scanDownloading: () => (en() ? "Google Play services is downloading its QR scanner: try again in a few seconds." : "Google Play services sta scaricando il lettore QR: riprova tra qualche secondo."),
+  scanUnavailable: () => (en() ? "The QR scanner of Google Play services is not available on this phone: use Paste, or open the link with UP Wallet." : "Il lettore QR di Google Play services non è disponibile su questo telefono: usa Incolla, oppure apri il link con UP Wallet."),
   noLink: () => (en() ? "No WalletConnect link (wc:...) in what was received." : "Nel testo ricevuto non c'è un link WalletConnect (wc:...)."),
   received: () => (en() ? "WalletConnect link received: check the steps above, then press Connect." : "Link WalletConnect ricevuto: controlla i passi sopra, poi premi Collega."),
 };
@@ -99,6 +107,43 @@ function addPasteButton() {
   });
   field.insertAdjacentElement("afterend", b);
   new MutationObserver(() => { b.textContent = T.paste(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+}
+
+// "Scan QR": Google Play services' code scanner (no camera permission for the app). The first time, Play
+// services may have to download the scanner: the user is asked to try again a moment later.
+async function scanText() {
+  if (window.__upwalletScan) return window.__upwalletScan();   // tests
+  const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
+  if (!available) {
+    BarcodeScanner.installGoogleBarcodeScannerModule().catch(() => null);
+    throw Object.assign(new Error("downloading"), { downloading: true });
+  }
+  const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] });
+  return barcodes && barcodes[0] ? barcodes[0].rawValue || barcodes[0].displayValue || "" : "";
+}
+function addScanButton() {
+  const paste = $("wcPaste");
+  if (!paste || $("wcScan") || !(Capacitor.isNativePlatform() || window.__upwalletScan)) return;
+  const b = document.createElement("button");
+  b.id = "wcScan";
+  b.type = "button";
+  b.className = "secondary";
+  b.textContent = T.scan();
+  b.addEventListener("click", async () => {
+    let text;
+    try { text = await scanText(); }
+    catch (e) {
+      if (/cancel/i.test((e && e.message) || "")) return;   // closed by the user
+      diag("QR scan: " + (e && e.downloading ? "scanner downloading" : "not available"));
+      window.alert(e && e.downloading ? T.scanDownloading() : T.scanUnavailable());
+      return;
+    }
+    if (!findLink(text)) { diag("QR scan: no WalletConnect link"); window.alert(T.scanNoLink()); return; }
+    diag("QR scan: WalletConnect link");
+    useText(text, true);
+  });
+  paste.insertAdjacentElement("afterend", b);
+  new MutationObserver(() => { b.textContent = T.scan(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
 }
 
 // Remembered on this phone only (the app's own storage, not backed up).
@@ -324,6 +369,7 @@ document.addEventListener("DOMContentLoaded", () => {
   watchPage();
   remember();
   addPasteButton();
+  addScanButton();
   if (Capacitor.isNativePlatform()) {
     IncomingLink.addListener("incoming", (d) => useText(d && d.text, true));
     IncomingLink.getPending().then((r) => { if (r && r.text) useText(r.text, true); }).catch(() => null);

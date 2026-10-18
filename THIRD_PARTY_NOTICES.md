@@ -41,3 +41,6 @@ list of the other packages in the bundle are in the Cross_Chain repository
 | Capacitor (`@capacitor/*`) | MIT |
 | Android Jetpack libraries (AndroidX), pulled in by Capacitor | Apache-2.0 |
 | Packages bundled with MetaMask Connect | their own licenses, in `node_modules` after `npm ci` |
+| `@capacitor-mlkit/barcode-scanning` 8.2.1 (Capawesome), for "Scan QR" | Apache-2.0 |
+| Google ML Kit barcode scanning and Google Play services code scanner (`com.google.mlkit:barcode-scanning`, `com.google.android.gms:play-services-code-scanner`), pulled in by that plugin | Google's terms for ML Kit and Google Play services (not open source; the ML Kit terms are at developers.google.com/ml-kit/terms) |
+| AndroidX CameraX, pulled in by that plugin (its in-app camera mode, not used by the app) | Apache-2.0 |

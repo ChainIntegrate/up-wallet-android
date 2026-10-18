@@ -40,6 +40,14 @@ on the site.
   app or text shared to it (Share -> UP Wallet) is put in the link field (the native side is
   `IncomingLinkPlugin.java`); connecting still takes a tap on the page's button. The UP address and
   the network are remembered on the phone.
+- "Scan QR" (since 0.7.24), next to Paste: for a dApp open on another screen (a computer) that shows its
+  WalletConnect QR code. Google Play services' code scanner (`@capacitor-mlkit/barcode-scanning`, its
+  `scan()` only) handles the camera, so the app has **no camera permission** and receives only the
+  text of the code; the `wc:` link in it goes in the field like a shared one (also when it is wrapped in
+  a wallet's link, `...?uri=wc%3A...`). Play services downloads the scanner when the app is installed
+  (`com.google.mlkit.vision.DEPENDENCIES` = `barcode_ui` in the manifest); if it is not there yet, the
+  app asks for the download and says to try again in a few seconds. A phone without Google Play services
+  has no scanner: Paste and shared links still work.
 - UP Wallet announces its own link, `upwallet://`, in the WalletConnect metadata: a dApp that honours
   it opens UP Wallet (not another wallet app) when it sends a request. "Back to the dApp" goes to the
   dApp's own app when the dApp announced its link (`redirect.native`), else to the app that opened a

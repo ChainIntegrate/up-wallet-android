@@ -21,6 +21,8 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
     if (!fs.existsSync(f)) return r.fulfill({ status: 404, body: "" });
     r.fulfill({ body: fs.readFileSync(f), contentType: TYPES[path.extname(f)] || "application/octet-stream" });
   });
+  // "Scan QR": the phone's scanner (Google Play services) replaced by a test double that returns window.__scanResult.
+  await ctx.addInitScript(() => { window.__upwalletScan = async () => { if (window.__scanErr) throw window.__scanErr; return window.__scanResult; }; });
   await ctx.addInitScript(() => { try { localStorage.setItem("upwallet.riskAccepted", "1"); localStorage.setItem("upwallet.view", "all"); localStorage.setItem("upwallet.lang", "it"); } catch (e) { /* none */ } });   // warnings accepted, full view
   let p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
   p.on("dialog", (d) => { errs.push("dialog: " + d.message()); d.dismiss(); });
@@ -44,6 +46,32 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   const before = errs.length;
   ck("Paste without a link: the field stays empty and the user is told", (await paste("hello")) === "" && errs.length === before + 1 && /wc:/.test(errs[errs.length - 1]), errs.slice(before).join("\n"));
   errs.length = before;
+
+  // Scan QR: right after Paste; the link found in the code goes in the field, as when shared to the app.
+  const sb = await p.evaluate(() => { const b = document.getElementById("wcScan"); return b && { text: b.textContent, after: b.previousElementSibling && b.previousElementSibling.id }; });
+  ck("a Scan QR button right after Paste", sb && sb.text === "Scansiona QR" && sb.after === "wcPaste", JSON.stringify(sb));
+  const scan = async (result, err) => {
+    await p.evaluate(([r, e]) => { window.__scanResult = r; window.__scanErr = e ? Object.assign(new Error(e.message), e) : null; document.getElementById("wcUri").value = ""; document.getElementById("wcStatus").textContent = ""; }, [result, err || null]);
+    await p.click("#wcScan");
+    await p.waitForTimeout(200);
+    return p.evaluate(() => ({ uri: document.getElementById("wcUri").value, status: document.getElementById("wcStatus").textContent }));
+  };
+  let sc = await scan(LINK);
+  ck("Scan QR: a dApp's WalletConnect code goes in the field, with the \"link received, press Connect\" note", sc.uri === LINK && /Link WalletConnect ricevuto/.test(sc.status), JSON.stringify(sc));
+  sc = await scan("https://metamask.app.link/wc?uri=" + encodeURIComponent(LINK));
+  ck("Scan QR: a code holding a wallet's link with the WalletConnect link inside", sc.uri === LINK, JSON.stringify(sc));
+  let n0 = errs.length;
+  sc = await scan("0x4a2605796e0d91A9667d6E30365aEEC384C48c27");
+  ck("Scan QR: a code without a WalletConnect link (an address): the field stays empty, the user is told", sc.uri === "" && errs.length === n0 + 1 && /QR WalletConnect/.test(errs[errs.length - 1]), errs.slice(n0).join("\n"));
+  errs.length = n0;
+  sc = await scan(null, { message: "scan canceled." });
+  ck("Scan QR closed by the user: nothing happens, no message", sc.uri === "" && errs.length === n0, errs.slice(n0).join("\n"));
+  sc = await scan(null, { message: "downloading", downloading: true });
+  ck("Scan QR the first time, while Play services downloads its scanner: \"try again in a few seconds\"", errs.length === n0 + 1 && /riprova tra qualche secondo/.test(errs[errs.length - 1]), errs.slice(n0).join("\n"));
+  errs.length = n0;
+  await p.click("#langToggle"); await p.waitForTimeout(100);
+  ck("Scan QR in English", (await p.$eval("#wcScan", (e) => e.textContent)) === "Scan QR");
+  await p.click("#langToggle"); await p.waitForTimeout(100);
 
   await p.selectOption("#network", "polygon");
   await p.fill("#upAddress", UP);
