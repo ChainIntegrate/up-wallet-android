@@ -23,6 +23,7 @@ const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${
     if (!f.startsWith(WWW) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) return r.fulfill({ status: 404, body: "" });
     r.fulfill({ body: fs.readFileSync(f), contentType: TYPES[path.extname(f)] || "application/octet-stream" });
   });
+  await p.addInitScript(() => { try { localStorage.setItem("upwallet.lang", "it"); } catch (e) { /* none */ } });   // the tests read the Italian texts
   await p.goto("https://localhost/");
   await p.waitForFunction(() => location.pathname === "/up-wallet.html" && typeof ethers !== "undefined" && document.querySelector("#requestModal"));
   await p.waitForTimeout(300);

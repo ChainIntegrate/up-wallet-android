@@ -34,7 +34,7 @@ async function page(b, bundle) {
     if (!fs.existsSync(f)) return r.fulfill({ status: 404, body: "" });
     r.fulfill({ body: fs.readFileSync(f), contentType: TYPES[path.extname(f)] || "application/octet-stream" });
   });
-  await p.addInitScript(() => { try { localStorage.setItem("upwallet.riskAccepted", "1"); localStorage.setItem("upwallet.view", "all"); } catch (e) { /* none */ } });   // warnings accepted, full view
+  await p.addInitScript(() => { try { localStorage.setItem("upwallet.riskAccepted", "1"); localStorage.setItem("upwallet.view", "all"); localStorage.setItem("upwallet.lang", "it"); } catch (e) { /* none */ } });   // warnings accepted, full view
   await p.goto("https://localhost/up-wallet.html");
   await p.waitForFunction(() => typeof ethers !== "undefined" && document.getElementById("connectSigner"));
   return { p, errs };
