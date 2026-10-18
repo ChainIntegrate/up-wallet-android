@@ -131,6 +131,27 @@ The app holds no keys: signing stays in MetaMask. Backups of app data are off (`
 
 To take a newer version of the page, change the commit in `UPSTREAM.json`.
 
+## Versions
+
+`versionName` is `major.minor.patch`; `versionCode` (in `android/app/build.gradle`) goes up by 1 with
+every published build, whatever the name. The release tag is `v<versionName>`.
+
+- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.7.x.
+- **patch** (0.7.24 → 0.7.25): fixes and small additions, and a page update from Cross_Chain.
+- **minor** for the intermediate milestones:
+  - **0.8.0**: the next major change, for example call decoding from any verified contract's ABI;
+  - **0.9.0**: the Play Store candidate, for the closed test.
+- **1.0.0: first public release on the Play Store**, once all of these hold:
+  1. the Play Store closed test is passed (for a personal developer account, about 12 testers for 14
+     days: check the current rule in the Play Console) and the store listing is approved;
+  2. the audit points that concern the app are closed (WalletConnect telemetry and SRI, CSP and the
+     other low ones in Cross_Chain's AUDIT.md);
+  3. the privacy policy and the terms are final, with no "beta" or "in testing";
+  4. signing with MetaMask, connecting to dApps (link, share, QR), sending from the UP and the gas paid
+     by the site work on the phone with no open problem (see "Still to do").
+- After 1.0.0: major for changes that break what users rely on (for example a new data format on the
+  phone), minor for new features, patch for fixes.
+
 ## Signing
 
 The release key never enters the repository. CI reads it from two repository secrets,
