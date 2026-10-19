@@ -6,7 +6,8 @@
 //   - app/app-shim.js and app/app.css are loaded by the page (links and relay calls to the site, phone layout);
 //   - app/metamask.js, bundled with esbuild, gives the page MetaMask mobile as its signing wallet;
 //   - app/native.js, bundled too: paste button, wc: links received from other apps, remembered UP and network;
-//   - the WalletConnect metadata names the site instead of the app's origin (https://upwallet.chainintegrate.it).
+//   - the WalletConnect metadata names the site instead of the app's origin (https://upwallet.chainintegrate.it);
+//   - the page's Content-Security-Policy hashes are computed again for the changed inline script (ethers is local).
 //
 //   node scripts/build-web.js                    clones Cross_Chain at the pinned commit into upstream/
 //   CROSS_CHAIN_DIR=/path node scripts/build-web.js   uses a local checkout instead (it must be at that commit)
@@ -91,6 +92,18 @@ async function main() {
   if (!html.includes(META)) throw new Error("WalletConnect metadata (url, icons) not found in the page");
   // redirect.native: UP Wallet's own link, which dApps open to bring the app forward with a request.
   html = html.replace(META, `      url: ${JSON.stringify(site.replace(/\/$/, ""))},\n      icons: [${JSON.stringify(site + "favicon.ico")}],\n      redirect: { native: "upwallet://" },`);
+  // Content-Security-Policy: the page lists the SHA-256 hash of each inline script it runs (Cross_Chain's
+  // tools/csp.js). The metadata change above edits one of them, so the hashes are computed again here,
+  // on the final page. The app's own scripts are files ('self'); Capacitor's bridge is injected at
+  // document start by the WebView, outside the page's policy.
+  const CSP = /<meta http-equiv="Content-Security-Policy" content="script-src ([^"]*)">/;
+  const csp = html.match(CSP);
+  if (csp) {
+    const inline = [...html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/g)].filter((m) => !/\ssrc=/.test(m[1] || "")).map((m) => m[2]);
+    const keep = csp[1].split(" ").filter((x) => !x.startsWith("'sha256-") && x !== "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/");
+    const hashes = inline.map((x) => `'sha256-${crypto.createHash("sha256").update(x, "utf8").digest("base64")}'`);
+    html = html.replace(CSP, `<meta http-equiv="Content-Security-Policy" content="script-src ${[...keep, ...hashes].join(" ")}">`);
+  }
   fs.writeFileSync(path.join(OUT, PAGE), html);
 
   fs.mkdirSync(path.join(OUT, "app"), { recursive: true });

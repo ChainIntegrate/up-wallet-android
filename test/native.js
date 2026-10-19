@@ -196,6 +196,22 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   ck("diagnostic log survives a restart and shows the restart", diag.summary === "Registro diagnostico (app)" && /marker-before-restart[\s\S]*Avvio dell'app/.test(diag.text) && diag.buttons.join(",") === "Copia,Svuota", JSON.stringify(diag));
 
   const html = fs.readFileSync(path.join(WWW, "up-wallet.html"), "utf8");
+  // The page's Content-Security-Policy, computed again by the build for the app's edited inline script:
+  // every inline script has its hash in the policy, the CDN is not allowed (ethers is local), and the page
+  // ran without a violation.
+  {
+    const crypto = require("crypto");
+    const meta = (html.match(/<meta http-equiv="Content-Security-Policy" content="script-src ([^"]*)">/) || [])[1] || "";
+    const want = [...html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/g)].filter((m) => !/\ssrc=/.test(m[1] || "")).map((m) => `'sha256-${crypto.createHash("sha256").update(m[2], "utf8").digest("base64")}'`);
+    const parts = meta.split(" ");
+    ck("CSP: the policy lists the hash of every inline script of the built page, and no CDN", !!meta && want.length > 0 && want.every((w) => parts.includes(w)) && !meta.includes("cdnjs") && parts[0] === "'self'", meta);
+    const blocked = await p.evaluate(() => new Promise((res) => {
+      let hit = false; document.addEventListener("securitypolicyviolation", () => { hit = true; });
+      const s = document.createElement("script"); s.textContent = "window.__cspProbe = 1"; document.head.appendChild(s);
+      setTimeout(() => res(hit && window.__cspProbe === undefined), 200);
+    }));
+    ck("CSP: an inline script injected into the app's page is blocked", blocked);
+  }
   const back = await p.evaluate(async () => {
     const got = [];
     window.__upwalletMinimize = (o) => got.push([o.url, o.site]);

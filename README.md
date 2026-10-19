@@ -30,6 +30,14 @@ on the site.
   site, and their origin check only applies to requests that carry an Origin); links to the site's other pages open in
   the phone's browser.
 - `app/app.css`: long addresses, hashes and links wrap inside their box (request window, status, log).
+- The page's Content-Security-Policy (since 0.7.25): the site's page carries a `<meta>` policy whose
+  `script-src` allows only its own files and its inline scripts by their SHA-256 hash, so a script
+  injected into the page does not run. `scripts/build-web.js` changes one inline script (the
+  WalletConnect metadata), so it computes the hashes again on the final page and drops the CDN from the
+  policy (ethers is bundled). The app's scripts are files, allowed as `'self'`. Capacitor's bridge is
+  injected at document start by the WebView, outside the page's policy; only a WebView too old for that
+  (without `DOCUMENT_START_SCRIPT`) would fall back to an inline script that the policy blocks, and the
+  native features would not work there.
 - `app/metamask.js` (bundled with esbuild): MetaMask mobile as the page's signing wallet. It is
   announced to the page through EIP-6963 as "MetaMask (app)", the way the browser extension is, and
   backed by MetaMask Connect (`@metamask/connect-evm`), which reaches the MetaMask app through
