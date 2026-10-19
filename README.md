@@ -4,10 +4,11 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **prototype, phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea, Uniswap and
-hup.social on Base, Arc and LUKSO: the app installs, shows the page, uses MetaMask mobile to sign,
-connects to dApps through WalletConnect links (pasted, opened with the app or shared to it), has the
-site relayer pay the gas, notifies dApp requests that arrive in the background, stays running while a
+Status: **prototype (0.7.25), phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea,
+Uniswap and hup.social on Base, Arc and LUKSO: the app installs, shows the page, uses MetaMask mobile
+to sign, connects to dApps through WalletConnect links (pasted, opened with the app, shared to it or
+scanned from a QR code), has the site relayer pay the gas (the page's card says who pays, site or
+controller, and changes it with a tap), notifies dApp requests that arrive in the background, stays running while a
 dApp is connected and goes back to the dApp. Sending from the UP (currency, tokens, NFTs) was tested
 on Base, Polygon and LUKSO. APKs are signed with the release key (section Signing). No store release
 yet. See "Still to do" below.
@@ -153,7 +154,7 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   1. the Play Store closed test is passed (for a personal developer account, about 12 testers for 14
      days: check the current rule in the Play Console) and the store listing is approved;
   2. the audit points that concern the app are closed (WalletConnect telemetry and SRI, CSP and the
-     other low ones in Cross_Chain's AUDIT.md);
+     other low ones in Cross_Chain's AUDIT.md): **done in 0.7.25**, see "Security reviews";
   3. the privacy policy and the terms are final, with no "beta" or "in testing";
   4. signing with MetaMask, connecting to dApps (link, share, QR), sending from the UP and the gas paid
      by the site work on the phone with no open problem (see "Still to do").
@@ -180,7 +181,13 @@ two Info items: the `uuid` advisory reaching the app through `@metamask/connect-
 yet; negligible for this use), and "Back to the dApp" opening a link the dApp announces (a plain VIEW
 intent, only on the user's tap, with dangerous schemes filtered). The High found in that review (W-H1:
 32-byte signatures refused only on the chosen network) was in the bundled page; the app carries the fix
-from 0.7.15. Not a professional audit.
+from 0.7.15.
+
+The items still open after that review were fixed in Cross_Chain on 2026-10-19 (`AUDIT.md`, rev. 12),
+and the app carries them from 0.7.25: WalletConnect telemetry off and the WalletConnect bundle loaded
+with Subresource Integrity (W-tel); the page's Content-Security-Policy, with its hashes computed again
+by the build (N-3, see "What the app adds to the page"); signatures not made out to the UP flagged
+(SIWE, Permit, EIP-3009) and a token that answers `false` refused (I-7, L-8). Not a professional audit.
 
 ## License
 
