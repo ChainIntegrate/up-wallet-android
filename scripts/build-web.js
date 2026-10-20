@@ -25,7 +25,8 @@ const appConfig = JSON.parse(fs.readFileSync(path.join(ROOT, "app-config.json"),
 
 // The page and the files it loads from the site. Anything else it links to opens in the phone's browser.
 const PAGE = "up-wallet.html";
-const FILES = [PAGE, "theme.js", "chains.js", "asset-list.js", "backup-check.js", "gas-relay-client.js",
+const FILES = [PAGE, "theme.js", "chains.js", "asset-list.js", "usd-price.js", "token-image.js", "backup-check.js",
+  "gas-relay-client.js", "call-decode.js", "abi-decode.js",
   "vendor/walletkit-1.6.0.min.js", "vendor/qrcode-generator-1.4.4.js", "banner.png", "logo.png", "favicon.ico"];
 // Whole folders of the site the page uses (the networks' logos).
 const DIRS = ["chain-logos"];
@@ -66,6 +67,11 @@ async function main() {
   }
 
   let html = fs.readFileSync(path.join(OUT, PAGE), "utf8");
+  // Every local script the page loads must be in FILES (config.js is generated): a script added to the
+  // page upstream and missing here would leave the app without it.
+  const missing = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1])
+    .filter((src) => !/^https?:/.test(src) && src !== "config.js" && !FILES.includes(src));
+  if (missing.length) throw new Error(`the page loads ${missing.join(", ")}: add to FILES in scripts/build-web.js`);
   const site = new URL(appConfig.site).href;
 
   // ethers: the same file the CDN serves, verified against the integrity attribute of the page itself.

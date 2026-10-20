@@ -73,7 +73,7 @@ const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${
 
   ck("no button to read the address from the UP extension (there is no extension on a phone); the address field stays",
     await p.evaluate(() => { showView("settings", false); return getComputedStyle(document.getElementById("connectUp")).display === "none" && !!document.getElementById("upAddress").offsetParent; }));
-  // The menu on a phone: the six buttons two per row, nothing wider than the screen; the network logos are in the app.
+  // The menu on a phone: six buttons two per row and the explanation on a row of its own, nothing wider than the screen; the network logos are in the app.
   const menu = await p.evaluate(async () => {
     showView("home", false);
     const W = document.documentElement.clientWidth, tiles = [...document.querySelectorAll(".tile")].map((t) => t.getBoundingClientRect());
@@ -82,7 +82,7 @@ const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${
     const ok = img ? await new Promise((r) => { if (img.complete) return r(img.naturalWidth > 0); img.onload = () => r(true); img.onerror = () => r(false); }) : false;
     return { n: tiles.length, rows, fits: tiles.every((r) => r.left >= 0 && r.right <= W + 1), logo: ok, src: img && img.src };
   });
-  ck("menu on the phone: six buttons in three rows of two, within the screen; network logos load from the app", menu.n === 6 && menu.rows === 3 && menu.fits && menu.logo, JSON.stringify(menu));
+  ck("menu on the phone: six buttons in three rows of two and the explanation below, within the screen; network logos load from the app", menu.n === 7 && menu.rows === 4 && menu.fits && menu.logo, JSON.stringify(menu));
   ck("no page errors", !errs.length, errs.join("\n"));
   await b.close();
   console.log(res.join("\n"));
