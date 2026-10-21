@@ -4,7 +4,7 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **prototype (0.8.0), phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea,
+Status: **prototype (0.8.1), phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea,
 Uniswap and hup.social on Base, Arc and LUKSO: the app installs, shows the page, uses MetaMask mobile
 to sign, connects to dApps through WalletConnect links (pasted, opened with the app, shared to it or
 scanned from a QR code), has the site relayer pay the gas (the page's card says who pays, site or
