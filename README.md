@@ -16,8 +16,10 @@ yet. See "Still to do" below.
 **Download**: the APK of each version is attached to its
 [release](https://github.com/ChainIntegrate/up-wallet-android/releases). On the phone, open the
 `.apk` and allow installing from that source when Android asks; if Play Protect warns that the app is
-unknown, choose "More details" → "Install anyway" (the app is not on the Play Store). Updates install
-over the previous version, keeping its data. You need MetaMask mobile, with your Universal Profile's
+unknown, choose "More details" → "Install anyway" (the app is not on the Play Store). Play Protect may
+also offer to scan the app at an update: the scan is Google's check of apps from developers it has
+not verified yet, not a change in the app (see [docs/developer-verification.md](docs/developer-verification.md)).
+Updates install over the previous version, keeping its data. You need MetaMask mobile, with your Universal Profile's
 controller account in it. The site's guide has the same steps.
 
 Privacy policy: [up-wallet-app-privacy.html](https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html)
@@ -146,15 +148,17 @@ To take a newer version of the page, change the commit in `UPSTREAM.json`.
 every published build, whatever the name. The release tag is `v<versionName>`.
 
 - **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.8.x.
-- **patch** (0.7.24 → 0.7.25): fixes and small additions, and a page update from Cross_Chain.
+- **patch** (0.8.0 → 0.8.1): fixes and small additions, and a page update from Cross_Chain.
 - **minor** for the intermediate milestones:
   - **0.8.0** (done): call decoding from any verified contract's ABI (Base, Arbitrum One, Arc), contracts
     named as the explorer names them, DeFi decoders (swaps, bridges, Spark), the "Every network" view with
     prices and token images;
   - **0.9.0**: the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
-  1. the Play Store closed test is passed (for a personal developer account, about 12 testers for 14
-     days: check the current rule in the Play Console) and the store listing is approved;
+  1. the developer account is verified (an organization account for ChainIntegrate, see
+     [docs/developer-verification.md](docs/developer-verification.md)), the store listing is approved
+     and any test the Play Console requires is passed (about 12 testers for 14 days applies to new
+     personal accounts; check the rule for the organization account);
   2. the audit points that concern the app are closed (WalletConnect telemetry and SRI, CSP and the
      other low ones in Cross_Chain's AUDIT.md): **done in 0.7.25**, see "Security reviews";
   3. the privacy policy and the terms are final, with no "beta" or "in testing";
@@ -218,6 +222,10 @@ Open from the phone tests:
 - **MetaMask cancels open requests when it locks** (auto-lock shorter than the time to read and
   confirm, 30 s in the tests): the page shows "User rejected". The app suggests 5 minutes; a clearer
   message for an unexpected 4001 (rejected without the user's tap) could follow.
+- **Aave Pro on Arc** (pro.aave.com): the deposit stops inside Aave, before any request reaches the
+  wallet, because Aave estimates gas through its own Arc node (`rpc.arc-scan.org`), which refuses
+  web pages (CORS). Since 0.8.1 the page checks that node at connection and says the block is on
+  Aave's side; the note goes away by itself once the node answers. On Base, Aave Pro works.
 - **Sign-in requests**: MetaMask always shows "Suspicious sign-in request" with two confirmations,
   because the request comes from UP Wallet, not from the dApp's site. Expected; explained in the
   page (Cross_Chain#123). Nothing to fix unless MetaMask changes.
@@ -227,7 +235,8 @@ Improvements:
   selector `0x00000000`, and OpenSea's newer contract `0x4cD0…BC31`, selector `0x49290c1c`): today
   they show as "call not recognised". This belongs to the page in Cross_Chain, for the site too.
 - A dApp on a chain other than the one chosen in the page (OpenSea's cross-chain checkout) is refused
-  by design: one UP, one network per session. Explain it better in the page, or accept it.
+  by design: one UP, one network per session. Since 0.8.1 a switch request is refused with 4001 and the
+  dApp is told the session's network, and the log says which network to choose in the dApp.
 - iPhone: not started (needs an Apple developer account and a review; MetaMask Connect and
   WalletConnect work there too, the native parts differ).
 - Listing in Reown's wallet registry, so that dApps show UP Wallet in their list (needs a store
@@ -244,6 +253,11 @@ Prototype parts to decide on before a release:
 
 The repository is public (since 8 October 2026), with the release key in CI secrets and the third-party
 notices in place. Before a Play Store release:
+- **developer verification**: an organization Play Console account for ChainIntegrate (legal entity,
+  D-U-N-S number, website verified in Search Console, documents) and the package registered with the
+  release key; on Play, Play App Signing with the existing key so that installed APKs update. Steps and
+  sources: [docs/developer-verification.md](docs/developer-verification.md). Google's global
+  enforcement is planned for 2027;
 - the privacy policy on the site names ChainIntegrate with info@chainintegrate.it: add the legal
   entity once it exists; the server keeps its logs no longer than the policy says (30 days);
 - optionally a separate Reown project for the app (own quota and statistics);
