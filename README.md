@@ -231,7 +231,8 @@ Open from the phone tests:
   because the request comes from UP Wallet, not from the dApp's site. Expected; explained in the
   page (Cross_Chain#123). Nothing to fix unless MetaMask changes.
 
-Improvements:
+Improvements (changes to the page itself are collected in Cross_Chain's
+[WALLET-BACKLOG.md](https://github.com/ChainIntegrate/Cross_Chain/blob/main/WALLET-BACKLOG.md) and made in batches):
 - **OpenSea purchases decoded** in the request window (Seaport 1.6 `fulfillBasicOrder_efficient`,
   selector `0x00000000`, and OpenSea's newer contract `0x4cD0…BC31`, selector `0x49290c1c`): today
   they show as "call not recognised". This belongs to the page in Cross_Chain, for the site too.
