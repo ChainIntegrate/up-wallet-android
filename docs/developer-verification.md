@@ -19,52 +19,44 @@ Timeline published by Google:
 Nothing in the app changed to cause the current scans: same signing key, same permissions since
 0.7.24.
 
-## Which account: two phases
+## Which account: an organization account
 
 The app is meant for Google Play (0.9.0 candidate, 1.0.0 first public release, see README
 "Versions"), so the account is a **Google Play Console** account: Google says it is the single
-place to manage verification for apps distributed both on and outside Play. A separate Android
-Developer Console account is only for developers who never publish on Play.
+place to manage verification for apps distributed both on and outside Play.
 
-### Phase 1: personal account, in ChainIntegrate's name where possible
+**A crypto wallet needs an organization account.** Google's "Play Console requirements" (point 1.1)
+say that developers of financial products and services, *cryptocurrency software wallets* and
+exchanges included, must register as an organization. The Play Console's sign-up shows it too:
+choosing "crypto wallet or exchange apps" warns that some apps in that category can be distributed
+only by organizations. A personal account converted later would not do: UP Wallet cannot be
+published under a personal account, and declaring the app otherwise to get through would be false.
+(A plan with a personal account first was considered on 2026-10-21 and dropped for this reason.)
 
-To start without waiting for a registered company and a D-U-N-S number:
-- create the Google account on **ChainIntegrate's e-mail address** (a Google account can be made
-  for an existing non-Gmail address, or through Google Workspace if the domain uses it), with 2-step
-  verification and recovery options the organization controls;
-- open a **personal** Play Console account with it: identity verified with the maintainer's own
-  legal name, address and ID (they stay the account holder until phase 2), contact e-mail and phone
-  verified with one-time codes, 25 USD fee once;
-- set the public **developer name** to ChainIntegrate;
-- for new personal accounts Google requires a **closed test** before production (about 12 testers
-  for 14 days: check the current rule in the Play Console);
-- check the Play Console's "Financial features" declaration: some financial app categories require
-  an organization account; a non-custodial wallet like UP Wallet is expected not to, but confirm it
-  there.
-
-With the personal account verified, the developer is known to Google and Play Protect's warnings
-for an unknown developer stop.
-
-### Phase 2: convert to an organization account
-
-When ChainIntegrate is a registered company (and before there is a market), the same account is
-converted in place: Play Console → Developer account → About you, verify the organization's website,
-then "Change account type" and set up the organization's payments profile. The app, its package
-name, signing key, listing, reviews and users stay where they are. The change is one-way
-(organization back to personal is not possible).
-
-What the conversion needs (Google's organization requirements):
-1. **A registered legal entity**, in whose name the account will be (README "Before a store
-   release" already lists adding it to the privacy policy).
-2. **A D-U-N-S number** for that entity, from Dun & Bradstreet: free, but it can take up to about
-   28 days, so request it as soon as the entity exists. The name and address should match the
-   D-U-N-S record.
+What the organization account needs:
+1. **A registered business**, in whose name the account will be. Dun & Bradstreet also assigns
+   D-U-N-S numbers to sole proprietorships registered with the Chamber of Commerce, so an existing
+   registered activity of the maintainer may be enough, without waiting for a company; the account
+   is then in that activity's name (README "Before a store release" lists adding the legal entity
+   to the privacy policy).
+2. **A D-U-N-S number** for it, from Dun & Bradstreet: free, but it can take up to about 28 days,
+   so request it first. The name and address in the account must match the D-U-N-S record.
 3. **The organization's website, verified in Google Search Console** (for example a DNS TXT record
-   on chainintegrate.it), with the same Google account.
+   on chainintegrate.it), with the Google account that opens the Play Console.
 4. **Official documents of the organization.** Accepted documents depend on the country; for Italy,
    check the list shown in the console (a Chamber of Commerce record, "visura camerale", is the likely
    equivalent).
-5. **The organization's payments profile** and contact details.
+5. **Contact e-mail and phone**, verified with one-time codes, the payments profile, and the
+   25 USD fee once.
+
+The Google account is ready: created on 2026-10-21 on ChainIntegrate's e-mail, with 2-step
+verification. Keep its recovery options under the organization's control.
+
+The closed test of about 12 testers for 14 days applies to new personal accounts; it is not expected
+for an organization account (check the rule in the Play Console when the account is open).
+
+Until the organization account exists, nothing changes for users: the APK installs from GitHub
+releases as today, with Play Protect's scan. Google's enforcement for Italy is planned from 2027.
 
 ## Registering the app
 
@@ -82,19 +74,14 @@ What the conversion needs (Google's organization requirements):
 
 ## Steps, in order
 
-Phase 1:
-1. Create the Google account on ChainIntegrate's e-mail, with 2-step verification.
-2. Open the personal Play Console account (identity, e-mail and phone codes, fee); developer name
-   ChainIntegrate.
-3. Register `it.chainintegrate.upwallet` with an APK signed with the release key.
-4. For the Play listing (0.9.0): closed test as the console requires, financial features and data
-   safety forms; Play App Signing with the existing key.
-
-Phase 2, when the company exists:
-1. Register ChainIntegrate as a legal entity.
-2. Request the D-U-N-S number (up to about 28 days).
-3. Verify chainintegrate.it in Google Search Console with the same Google account.
-4. Convert the account: "Change account type", organization payments profile, documents.
+1. Google account on ChainIntegrate's e-mail, with 2-step verification (done, 2026-10-21).
+2. The registered business (an existing registered activity, or a new company).
+3. Request the D-U-N-S number (up to about 28 days).
+4. Verify chainintegrate.it in Google Search Console with the same Google account.
+5. Open the Play Console **organization** account (D-U-N-S, documents, contact codes, fee).
+6. Register `it.chainintegrate.upwallet` with an APK signed with the release key.
+7. For the Play listing (0.9.0): financial features and data safety forms (non-custodial wallet),
+   any test the console requires, Play App Signing with the existing key.
 
 ## Sources
 
@@ -106,5 +93,6 @@ Phase 2, when the company exists:
   (organization requirements: D-U-N-S, Search Console, documents, e-mail and phone)
 - [FAQ](https://developer.android.com/developer-verification/guides/faq) (fee, D-U-N-S time, signing
   keys, Play Console as the single place)
-- [Play Console Help: change the account type](https://support.google.com/googleplay/android-developer/answer/16260648)
-  (personal to organization in place, one-way)
+- [Play Console requirements](https://support.google.com/googleplay/android-developer/answer/10788890)
+  (point 1.1: financial products, cryptocurrency software wallets included, register as an
+  organization)

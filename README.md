@@ -155,11 +155,10 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     prices and token images;
   - **0.9.0**: the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
-  1. the developer account is verified (first a personal Play Console account created on
-     ChainIntegrate's e-mail, with ChainIntegrate as developer name, converted to an organization
-     account once the company exists: see [docs/developer-verification.md](docs/developer-verification.md)),
-     the store listing is approved and the closed test is passed (for a new personal account about
-     12 testers for 14 days: check the current rule in the Play Console);
+  1. the developer account is verified: an **organization** Play Console account, since Google
+     requires one for crypto wallets (registered business, D-U-N-S number, website verified; see
+     [docs/developer-verification.md](docs/developer-verification.md)), the store listing is approved
+     and any test the console requires is passed;
   2. the audit points that concern the app are closed (WalletConnect telemetry and SRI, CSP and the
      other low ones in Cross_Chain's AUDIT.md): **done in 0.7.25**, see "Security reviews";
   3. the privacy policy and the terms are final, with no "beta" or "in testing";
@@ -255,11 +254,10 @@ Prototype parts to decide on before a release:
 
 The repository is public (since 8 October 2026), with the release key in CI secrets and the third-party
 notices in place. Before a Play Store release:
-- **developer verification**: a personal Play Console account on ChainIntegrate's e-mail (developer
-  name ChainIntegrate) to start, converted in place to an organization account when the company
-  exists (legal entity, D-U-N-S number, website verified in Search Console, documents); the package
-  registered with the release key; on Play, Play App Signing with the existing key so that installed
-  APKs update. Steps and
+- **developer verification**: an organization Play Console account (Google requires one for crypto
+  wallets: registered business, D-U-N-S number, website verified in Search Console, documents) on
+  the Google account already created on ChainIntegrate's e-mail; the package registered with the
+  release key; on Play, Play App Signing with the existing key so that installed APKs update. Steps and
   sources: [docs/developer-verification.md](docs/developer-verification.md). Google's global
   enforcement is planned for 2027;
 - the privacy policy on the site names ChainIntegrate with info@chainintegrate.it: add the legal
