@@ -156,6 +156,22 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
     nb.before && nb.shown && nb.text === "↩ Torna alla dApp" && nb.afterClick && nb.shownAgain && nb.hiddenOnNew, JSON.stringify(nb));
   ck("a send from the UP (no dApp): no \"Back to the dApp\" after it; a dApp request after it shows it again", nb.hiddenAfterLocal && nb.shownAfterDapp, JSON.stringify(nb));
   ck("\"Back to the dApp\" puts UP Wallet in the background", nb.mins === 1);
+  const ne = await p.evaluate(async () => {
+    const sent = [];
+    window.__upwalletNotify = (n) => sent.push(n.body);
+    const log = document.getElementById("log");
+    const line = (t, cls) => { const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = t; log.appendChild(d); };
+    const tick = () => new Promise((r) => setTimeout(r, 30));
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    line("Richiesta dalla dApp: eth_sendTransaction"); await tick();
+    line("❌ Il controller non ha abbastanza gas.", "line-err"); await tick();
+    line("❌ Un secondo errore della stessa richiesta.", "line-err"); await tick();
+    line("Ritorno nell'app: collegamento con MetaMask rinnovato.", "line-dim"); await tick();
+    window.__upwalletNotify = null; delete document.hidden;
+    return sent;
+  });
+  ck("in the background, a dApp request that ends in an error is notified once, after the request",
+    ne.length === 2 && ne[1] === "opensea.io: la richiesta non è andata a buon fine. Tocca per vedere il motivo in UP Wallet.", JSON.stringify(ne));
 
   // Keep-alive while a dApp session is active; the MetaMask auto-lock tip.
   const ka = await p.evaluate(async () => {

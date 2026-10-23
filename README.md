@@ -4,7 +4,7 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **prototype (0.8.1), phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea,
+Status: **prototype (0.8.2), phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea,
 Uniswap and hup.social on Base, Arc and LUKSO: the app installs, shows the page, uses MetaMask mobile
 to sign, connects to dApps through WalletConnect links (pasted, opened with the app, shared to it or
 scanned from a QR code), has the site relayer pay the gas (the page's card says who pays, site or
@@ -153,6 +153,9 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   - **0.8.0** (done): call decoding from any verified contract's ABI (Base, Arbitrum One, Arc), contracts
     named as the explorer names them, DeFi decoders (swaps, bridges, Spark), the "Every network" view with
     prices and token images;
+  - **0.8.2** (patch): page batch of 2026-10-23 (Aave and CoW decoding, positions in "Every network",
+    the UP's profile picture, the controller as fallback when the site relayer cannot take an
+    operation); in the app, an error of a dApp request is notified when the app is in the background;
   - **0.9.0**: the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google

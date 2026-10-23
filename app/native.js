@@ -176,6 +176,7 @@ const N = {
   sign: () => (en() ? "a signature" : "una firma"),
   tx: () => (en() ? "a transaction" : "una transazione"),
   connect: () => (en() ? "to connect" : "di collegarsi"),
+  errBody: (who) => (en() ? `${who}: the request was not completed. Tap to see why in UP Wallet.` : `${who}: la richiesta non è andata a buon fine. Tocca per vedere il motivo in UP Wallet.`),
   body: (who, what) => (en() ? `${who} asks for ${what}: tap to open UP Wallet.` : `${who} chiede ${what}: tocca per aprire UP Wallet.`),
   back: () => (en() ? "↩ Back to the dApp" : "↩ Torna alla dApp"),
   channel: () => (en() ? "dApp requests" : "Richieste delle dApp"),
@@ -199,9 +200,9 @@ const SESSION = /(?:Sessione attiva con|Session active with) (.+?) \((https?:\/\
 const DONE = /Firma inviata alla dApp|Signature sent to the dApp|Operazione eseguita|Operation done|Transazione confermata|Transaction confirmed|Modalità simulazione: niente inviato|Simulation mode: nothing sent|^Richiesta rifiutata|^Request rejected|^❌/;
 let dappName = "", notifId = 1;
 
-async function notify(what) {
+async function notify(what, body) {
   if (!document.hidden) return;
-  const n = { id: notifId++, title: "UP Wallet", body: N.body(dappName || "dApp", what), channelId: "requests" };
+  const n = { id: notifId++, title: "UP Wallet", body: body || N.body(dappName || "dApp", what), channelId: "requests" };
   diag((en() ? "Notification: " : "Notifica: ") + n.body);
   if (window.__upwalletNotify) return window.__upwalletNotify(n);   // tests
   if (!native()) return;
@@ -289,16 +290,22 @@ function addBackButton() {
 }
 
 function watchPage() {
-  let local = false;
-  const onLine = (t) => {
+  let local = false, errNotified = false;
+  const onLine = (t, node) => {
     let m;
     if ((m = t.match(PROP))) { local = false; dappName = hostOf(m[2]) || m[1]; showBack(false); notify(N.connect()); }
-    else if ((m = t.match(REQ))) { local = false; showBack(false); notify(/sendTransaction/.test(m[1]) ? N.tx() : N.sign()); }
+    else if ((m = t.match(REQ))) { local = false; errNotified = false; showBack(false); notify(/sendTransaction/.test(m[1]) ? N.tx() : N.sign()); }
     else if (LOCAL.test(t)) { local = true; showBack(false); }
-    else if (DONE.test(t) && !local) showBack(true);
+    else {
+      // A dApp request that ended in an error: notified once, like the request, if the app is in the background
+      // (the page keeps the error visible in the short log).
+      const err = node && node.classList && (node.classList.contains("line-err") || node.classList.contains("line-danger"));
+      if (err && !local && !errNotified) { errNotified = true; notify("", N.errBody(dappName || "dApp")); }
+      if (DONE.test(t) && !local) showBack(true);
+    }
   };
   const log = $("log");
-  if (log) new MutationObserver((muts) => { for (const mu of muts) for (const n of mu.addedNodes) onLine((n.textContent || "").trim()); }).observe(log, { childList: true });
+  if (log) new MutationObserver((muts) => { for (const mu of muts) for (const n of mu.addedNodes) onLine((n.textContent || "").trim(), n); }).observe(log, { childList: true });
   const st = $("wcStatus");
   if (st) new MutationObserver(() => {
     const m = (st.textContent || "").match(SESSION);
