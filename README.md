@@ -22,6 +22,42 @@ not verified yet, not a change in the app (see [docs/developer-verification.md](
 Updates install over the previous version, keeping its data. You need MetaMask mobile, with your Universal Profile's
 controller account in it. The site's guide has the same steps.
 
+## 0.9.0: the app becomes the wallet (in progress, branch `v0.9`)
+
+> **⚠️ Experimental: the maintainer's own wallet.** From 0.9.0 the app keeps a signing key on the phone.
+> That is a higher risk than signing in an external wallet: whoever can unlock the phone and pass its
+> fingerprint or PIN can sign with that key. Use it only if you understand how a Universal Profile's
+> controllers and permissions work, with small amounts, at your own risk. MIT license: no warranty.
+
+What changes:
+- **MetaMask leaves the app.** A dApp connects through WalletConnect (link, share or QR, as today) and
+  the app signs by itself: no other app in between.
+- **A new key, created on the phone at first start.** It never leaves the phone: it is encrypted with
+  the Android Keystore (the phone's secure hardware where there is one), used only after fingerprint or
+  PIN, **for every signature**, and the signature is made in the app's native code, so the page never
+  sees the key. There is no seed phrase and no copy: app data is not backed up (`allowBackup="false"`),
+  and uninstalling the app or losing the phone loses the key. That is handled by revoking it.
+- **Authorized once per network, from the site.** The app shows the key's address (copy, QR). On a
+  computer, the site's **Backup** page, "Authorize a phone", adds it as a controller of the UP on that
+  network, signed by an admin controller in MetaMask, with **limited permissions**:
+
+  | Permission | For |
+  |---|---|
+  | `SUPER_CALL`, `SUPER_TRANSFERVALUE` | dApps and sends |
+  | `SIGN` | signatures for dApps (ERC-1271) |
+  | the 4337 permission | gas paid by the site |
+  | `SETDATA`, only on `LSP3Profile` | aligning the profile |
+
+  Never adding controllers, editing permissions or extensions: those stay with the admin keys (the
+  genesis key, the backup). The same page revokes a lost phone's key, network by network.
+- **Everything else stays**: the request window, its checks and simulation, the gas relay, sending from
+  the UP, notifications, "Back to the dApp".
+- A warning at the first start, until accepted, with the text above.
+
+Release: from the branch `v0.9`, pinned to Cross_Chain's open pull request; `main` stays on 0.8.2 until
+0.9.0 works on the phone. If 0.9.0 has to be withdrawn after it was installed, 0.9.1 republishes
+0.8.2's code with a higher `versionCode` (Android does not install an older version over a newer one).
+
 Privacy policy: [up-wallet-app-privacy.html](https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html)
 on the site.
 
@@ -156,7 +192,8 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   - **0.8.2** (patch): page batch of 2026-10-23 (Aave and CoW decoding, positions in "Every network",
     the UP's profile picture, the controller as fallback when the site relayer cannot take an
     operation); in the app, an error of a dApp request is notified when the app is in the background;
-  - **0.9.0**: the Play Store candidate, for the closed test.
+  - **0.9.0** (in progress): the phone key replaces MetaMask (section above);
+  - **0.9.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
      requires one for crypto wallets (registered business, D-U-N-S number, website verified; see
@@ -165,8 +202,9 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   2. the audit points that concern the app are closed (WalletConnect telemetry and SRI, CSP and the
      other low ones in Cross_Chain's AUDIT.md): **done in 0.7.25**, see "Security reviews";
   3. the privacy policy and the terms are final, with no "beta" or "in testing";
-  4. signing with MetaMask, connecting to dApps (link, share, QR), sending from the UP and the gas paid
-     by the site work on the phone with no open problem (see "Still to do").
+  4. signing with the phone key, connecting to dApps (link, share, QR), sending from the UP and the gas
+     paid by the site work on the phone with no open problem (see "Still to do");
+  5. a professional audit of the app, its phone key included (Cross_Chain's roadmap).
 - After 1.0.0: major for changes that break what users rely on (for example a new data format on the
   phone), minor for new features, patch for fixes.
 
@@ -266,8 +304,10 @@ notices in place. Before a Play Store release:
 - the privacy policy on the site names ChainIntegrate with info@chainintegrate.it: add the legal
   entity once it exists; the server keeps its logs no longer than the policy says (30 days);
 - optionally a separate Reown project for the app (own quota and statistics);
-- **licenses**: MetaMask Connect allows non-commercial use or up to 10,000 monthly active users;
-  beyond that, a license from ConsenSys or another library (THIRD_PARTY_NOTICES.md);
+- the store's data safety and financial features forms for a non-custodial wallet that keeps a key on
+  the phone, and the privacy policy updated for it (0.9.0);
+- **licenses**: up to 0.8.x, MetaMask Connect (non-commercial use or up to 10,000 monthly active users);
+  from 0.9.0 it is no longer in the app (THIRD_PARTY_NOTICES.md to update);
 - remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests);
 - the "special use" foreground service (`KeepAliveService`, Android 14+) needs a declaration in the
   Play Console explaining the use (the text is in the manifest's `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`).

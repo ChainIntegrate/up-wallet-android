@@ -21,7 +21,7 @@ Nothing in the app changed to cause the current scans: same signing key, same pe
 
 ## Which account: an organization account
 
-The app is meant for Google Play (0.9.0 candidate, 1.0.0 first public release, see README
+The app is meant for Google Play (0.9.x candidate, 1.0.0 first public release, see README
 "Versions"), so the account is a **Google Play Console** account: Google says it is the single
 place to manage verification for apps distributed both on and outside Play.
 
@@ -80,7 +80,7 @@ releases as today, with Play Protect's scan. Google's enforcement for Italy is p
 4. Verify chainintegrate.it in Google Search Console with the same Google account.
 5. Open the Play Console **organization** account (D-U-N-S, documents, contact codes, fee).
 6. Register `it.chainintegrate.upwallet` with an APK signed with the release key.
-7. For the Play listing (0.9.0): financial features and data safety forms (non-custodial wallet),
+7. For the Play listing (0.9.x): financial features and data safety forms (non-custodial wallet that keeps a key on the phone since 0.9.0),
    any test the console requires, Play App Signing with the existing key.
 
 ## Sources
