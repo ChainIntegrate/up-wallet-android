@@ -76,6 +76,9 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
   const before = await p.evaluate(() => ({ btn: document.getElementById("connectSigner").textContent, panel: (document.getElementById("pkPanel") || {}).innerText || "" }));
   ck("panel 3: \"Use the phone key\", and no key yet", before.btn === "Usa la chiave del telefono" && /Nessuna chiave del telefono/.test(before.panel), JSON.stringify(before));
 
+  const texts = await p.evaluate(() => ({ cls: document.documentElement.classList.contains("phone-key"), p3: document.querySelector('[data-i18n="panel3Title"]').textContent, ready: t("readyToSend"), perms: t("permsNone"), body: document.body.innerText }));
+  ck("the page's texts name the phone key, not MetaMask (html.phone-key)", texts.cls && texts.p3 === "3 · Controller (chiave del telefono) e verifica" && /conferma con l'impronta/.test(texts.ready) && /Autorizza un telefono/.test(texts.perms)
+    && !/MetaMask/.test(texts.body.replace(/Nessuna affiliazione[^.]*\./, "")), JSON.stringify({ ...texts, body: (texts.body.match(/.{0,80}MetaMask.{0,80}/g) || []).join(" | ") }));
   await p.selectOption("#network", "base");
   await p.fill("#upAddress", UP);
   await p.click("#connectSigner");

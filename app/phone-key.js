@@ -10,6 +10,8 @@
 // Bundled by scripts/build-web.js (esbuild) into www/app/phone-key.js; loaded after chains.js.
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
+// The page's texts name the phone key instead of MetaMask (up-wallet.html, PHONE_I18N).
+document.documentElement.classList.add("phone-key");
 const PK = window.__upwalletPhoneKey || (Capacitor.isNativePlatform() ? registerPlugin("PhoneKey") : null);   // __upwalletPhoneKey: tests
 const SITE = window.__upwalletSite || "https://crosschain-lukso.chainintegrate.it/";
 const ACK_KEY = "upwallet.phonekey.ack";
