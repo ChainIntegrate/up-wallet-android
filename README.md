@@ -171,7 +171,7 @@ The app holds no keys: signing stays in MetaMask. Backups of app data are off (`
   ```
   npm ci
   npm run web            # or: CROSS_CHAIN_DIR=../Cross_Chain npm run web (that checkout must be at the pinned commit)
-  npm test               # phone layout, MetaMask, native features (needs Playwright and Chromium)
+  npm test               # phone layout, phone key, native features (needs Playwright and Chromium)
   npx cap sync android
   cd android && ./gradlew assembleDebug    # signed with this machine's debug key
   ```

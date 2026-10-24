@@ -23,7 +23,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   });
   // "Scan QR": the phone's scanner (Google Play services) replaced by a test double that returns window.__scanResult.
   await ctx.addInitScript(() => { window.__upwalletScan = async () => { if (window.__scanErr) throw window.__scanErr; return window.__scanResult; }; });
-  await ctx.addInitScript(() => { try { localStorage.setItem("upwallet.riskAccepted", "1"); localStorage.setItem("upwallet.view", "all"); localStorage.setItem("upwallet.lang", "it"); } catch (e) { /* none */ } });   // warnings accepted, full view
+  await ctx.addInitScript(() => { try { localStorage.setItem("upwallet.riskAccepted", "1"); localStorage.setItem("upwallet.phonekey.ack", "1"); localStorage.setItem("upwallet.view", "all"); localStorage.setItem("upwallet.lang", "it"); } catch (e) { /* none */ } });   // warnings accepted, full view
   let p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
   p.on("dialog", (d) => { errs.push("dialog: " + d.message()); d.dismiss(); });
   await p.goto("https://localhost/up-wallet.html");
@@ -173,7 +173,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   ck("in the background, a dApp request that ends in an error is notified once, after the request",
     ne.length === 2 && ne[1] === "opensea.io: la richiesta non è andata a buon fine. Tocca per vedere il motivo in UP Wallet.", JSON.stringify(ne));
 
-  // Keep-alive while a dApp session is active; the MetaMask auto-lock tip.
+  // Keep-alive while a dApp session is active.
   const ka = await p.evaluate(async () => {
     const calls = [];
     window.__upwalletKeepAlive = { start: async (o) => calls.push("start: " + o.text), stop: async () => calls.push("stop") };
@@ -183,8 +183,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
     st.textContent = st.textContent + " "; await tick();   // the same session again: no second start
     st.textContent = "Nessuna sessione."; await tick();
     window.__upwalletKeepAlive = null;
-    const tip = document.getElementById("mmLockTip");
-    return { calls, tip: tip && tip.textContent, after: tip && tip.previousElementSibling && tip.previousElementSibling.id };
+    return { calls, lockTip: !!document.getElementById("mmLockTip") };
   });
   ck("while a dApp session is active the app stays running (one start, named by the dApp's host); stops when none is left",
     JSON.stringify(ka.calls) === JSON.stringify(["start: Collegato a opensea.io: UP Wallet resta attivo per ricevere le richieste.", "stop"]), JSON.stringify(ka.calls));
@@ -199,7 +198,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
   });
   ck("keep-alive refused by Android (daily time limit): the app goes on, and the log says why",
     /Keep-alive: on \(hup\.social\)[\s\S]*Keep-alive non disponibile: ForegroundServiceStartNotAllowedException: Time limit/.test(refused), refused.slice(-400));
-  ck("panel 3 suggests MetaMask's auto-lock at 5 minutes", ka.after === "connectSigner" && /Blocco automatico a 5 minuti/.test(ka.tip || ""), JSON.stringify(ka));
+  ck("no MetaMask auto-lock tip any more (0.9.0: no MetaMask in the app)", !ka.lockTip, JSON.stringify(ka));
 
   // Diagnostic log: kept across restarts, shown under the page's log with Copy and Clear.
   await p.evaluate(() => window.upwDiag.add("marker-before-restart"));
@@ -266,8 +265,8 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
     /"alchemyApiKey": "[A-Za-z0-9_-]*"/.test(cfgText) && !/alchemy/i.test(fs.readFileSync(path.join(__dirname, "..", "app-config.json"), "utf8"))
     && (!process.env.ALCHEMY_KEY || cfgText.includes(process.env.ALCHEMY_KEY)), "config.js or app-config.json not as expected (the key itself is never printed)");
   const notice = await p.evaluate(() => { const d = document.getElementById("appNotice"); return d && { text: d.textContent, href: d.querySelector("a").href, privacy: d.querySelectorAll("a")[1].href, after: d.previousElementSibling.className }; });
-  ck("MetaMask Connect's notice under the page footer, with links to the third-party notices and the privacy policy",
-    notice && /MetaMask Connect, © ConsenSys Software Inc\./.test(notice.text) && /10\.000 utenti/.test(notice.text) && notice.after === "site-footer"
+  ck("under the page footer: the app's third-party notices and the privacy policy (no MetaMask Connect any more)",
+    notice && /^App UP Wallet: /.test(notice.text) && !/MetaMask/.test(notice.text) && notice.after === "site-footer"
     && notice.href === "https://github.com/ChainIntegrate/up-wallet-android/blob/main/THIRD_PARTY_NOTICES.md"
     && notice.privacy === "https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html", JSON.stringify(notice));
   ck("no page errors", !errs.length, errs.join("\n"));

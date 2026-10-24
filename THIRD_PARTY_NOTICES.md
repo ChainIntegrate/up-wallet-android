@@ -3,21 +3,14 @@
 This repository's own code is under the MIT license ([LICENSE](LICENSE)). The APK built from it also
 contains the third-party code below, each under its own terms.
 
-## MetaMask Connect
+## Bouncy Castle
 
-`@metamask/connect-evm` and `@metamask/connect-multichain` (with the packages they bring in), bundled
-into `www/app/metamask.js` by `scripts/build-web.js`. The build applies two small changes to
-`@metamask/connect-multichain` (request timeout, connection renewed on focus), described in that script.
+`org.bouncycastle:bcprov-jdk18on` 1.78.1, used by `Secp256k1.java` for the phone key (secp256k1
+signatures and Keccak-256), from 0.9.0. Under the Bouncy Castle license, an MIT-style license:
 
-> This program uses MetaMask Connect. MetaMask Connect is the copyright of ConsenSys Software Inc.
-> Copyright ConsenSys Software Inc. 2022. All rights reserved.
+> Copyright (c) 2000-2024 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)
 
-It is **not** under an open-source license. ConsenSys' license (in `node_modules/@metamask/connect-evm/LICENSE`
-after `npm ci`) allows distribution, modification and combination with another program only for
-Non-Commercial Use, which includes a program with no more than 10,000 monthly active users across all
-its versions and platforms; it requires the notice above with each copy, and passes the same terms on
-to the resulting program. The app shows the notice under the page's footer. Beyond those terms, a
-license from ConsenSys (metamask.license@consensys.net) or another library is needed.
+Up to 0.8.x the APK contained MetaMask Connect (ConsenSys' license); from 0.9.0 it does not.
 
 ## WalletConnect bundle (Reown)
 
@@ -40,7 +33,7 @@ list of the other packages in the bundle are in the Cross_Chain repository
 | ethers 6.13.4 | MIT |
 | Capacitor (`@capacitor/*`) | MIT |
 | Android Jetpack libraries (AndroidX), pulled in by Capacitor | Apache-2.0 |
-| Packages bundled with MetaMask Connect | their own licenses, in `node_modules` after `npm ci` |
+| AndroidX Biometric (`androidx.biometric:biometric` 1.1.0), the fingerprint or PIN prompt of the phone key | Apache-2.0 |
 | `@capacitor-mlkit/barcode-scanning` 8.2.1 (Capawesome), for "Scan QR" | Apache-2.0 |
 | Google ML Kit barcode scanning and Google Play services code scanner (`com.google.mlkit:barcode-scanning`, `com.google.android.gms:play-services-code-scanner`), pulled in by that plugin | Google's terms for ML Kit and Google Play services (not open source; the ML Kit terms are at developers.google.com/ml-kit/terms) |
 | AndroidX CameraX, pulled in by that plugin (its in-app camera mode, not used by the app) | Apache-2.0 |

@@ -6,7 +6,7 @@
   "scripts": {
     "web": "node scripts/build-web.js",
     "sync": "npm run web && npx cap sync android",
-    "test": "node test/mobile-layout.js && node test/metamask.js && node test/native.js"
+    "test": "node test/mobile-layout.js && node test/phone-key.js && node test/native.js"
   },
   "dependencies": {
     "@capacitor-mlkit/barcode-scanning": "8.2.1",
@@ -15,8 +15,7 @@
     "@capacitor/app-launcher": "8.0.1",
     "@capacitor/clipboard": "8.0.1",
     "@capacitor/core": "8.5.2",
-    "@capacitor/local-notifications": "8.3.1",
-    "@metamask/connect-evm": "2.1.1"
+    "@capacitor/local-notifications": "8.3.1"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.2",

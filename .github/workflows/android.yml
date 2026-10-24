@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, v0.9]   # v0.9: the phone key, built before its release
   release:
     types: [published]
   pull_request:
@@ -44,7 +44,7 @@ jobs:
           npx --yes playwright@1.56.1 install --with-deps chromium
           npm install --no-save playwright@1.56.1
 
-      - name: Tests (phone layout, MetaMask, native features)
+      - name: Tests (phone layout, phone key, native features)
         timeout-minutes: 5
         run: npm test
 
@@ -65,6 +65,12 @@ jobs:
           else
             echo "No release key in the secrets: building a debug APK."
           fi
+
+      # The phone key's signatures (Secp256k1.java) against vectors made with ethers.
+      - name: Java unit tests
+        working-directory: android
+        timeout-minutes: 10
+        run: ./gradlew testDebugUnitTest --no-daemon
 
       - name: Build the APK
         working-directory: android

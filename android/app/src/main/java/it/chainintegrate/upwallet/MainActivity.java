@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(IncomingLinkPlugin.class);
         registerPlugin(KeepAlivePlugin.class);
+        registerPlugin(PhoneKeyPlugin.class);
         super.onCreate(savedInstanceState);
         // The page runs in the WebView's renderer, a separate process. By default its priority drops when
         // the app is not visible, and Android froze it after ~8 minutes in the background even with the

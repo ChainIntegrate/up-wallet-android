@@ -16,8 +16,6 @@
 //   was showing (or, without a default browser, puts UP Wallet in the background).
 // - While a dApp is connected the app stays running (a foreground service with an ongoing notification):
 //   otherwise Android freezes it after a few minutes in the background and requests wait for the user.
-// - Panel 3 suggests MetaMask's auto-lock at 5 minutes: when MetaMask locks while a request is open, it
-//   drops the request (the page gets "User rejected").
 // Bundled by scripts/build-web.js (esbuild) into www/app/native.js.
 import { Clipboard } from "@capacitor/clipboard";
 import { Capacitor, CapacitorHttp, registerPlugin } from "@capacitor/core";
@@ -186,9 +184,6 @@ const N = {
     ? "Request notifications not popping up at the top of the screen? Some phones (ColorOS among them) keep pop-ups off for apps installed from an APK: turn on \"Banner notifications\" (or \"Pop-up\") for \"dApp requests\"."
     : "Le notifiche delle richieste non compaiono in alto sullo schermo? Alcuni telefoni (ColorOS tra questi) tengono spenti i popup per le app installate da APK: attiva \"Notifiche banner\" (o \"Popup\") per \"Richieste delle dApp\"."),
   notifBtn: () => (en() ? "Notification settings" : "Impostazioni delle notifiche"),
-  lockTip: () => (en()
-    ? "Tip: in MetaMask set Auto-lock to 5 minutes (Settings → Security & privacy). If MetaMask locks while you are reading a request, it cancels it and the page gets \"rejected\"."
-    : "Consiglio: in MetaMask imposta il Blocco automatico a 5 minuti (Impostazioni → Sicurezza e privacy). Se MetaMask si blocca mentre leggi una richiesta, la annulla e qui risulta \"rifiutata\"."),
 };
 // The dApp's site as shown in the page's lines ("Name (https://site)"): its host, short and verified.
 const hostOf = (url) => { try { return new URL(url).host.replace(/^www\./, ""); } catch (e) { return ""; } };
@@ -313,12 +308,6 @@ function watchPage() {
     keepAlive(m ? dappName : null);
   }).observe(st, { childList: true, subtree: true, characterData: true });
   const signer = $("connectSigner");
-  if (signer && !$("mmLockTip")) {
-    const tip = document.createElement("div");
-    tip.id = "mmLockTip"; tip.className = "note"; tip.style.marginTop = "6px";
-    tip.textContent = N.lockTip();
-    signer.insertAdjacentElement("afterend", tip);
-  }
   if (signer && native() && !$("notifTip")) {
     const tip = document.createElement("div");
     tip.id = "notifTip"; tip.className = "note"; tip.style.marginTop = "6px";
@@ -329,7 +318,7 @@ function watchPage() {
     fill();
     b.addEventListener("click", () => IncomingLink.openNotificationSettings({ channel: "requests" }).catch(() => null));
     tip.append(text, b);
-    ($("mmLockTip") || signer).insertAdjacentElement("afterend", tip);
+    ($("pkPanel") || signer).insertAdjacentElement("afterend", tip);
     new MutationObserver(fill).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
   }
   const pair = $("pairBtn");
@@ -341,8 +330,8 @@ function watchPage() {
   if (native()) LocalNotifications.createChannel({ id: "requests", name: N.channel(), importance: 5, visibility: 1, vibration: true }).catch(() => null);
 }
 
-// The notice MetaMask Connect's license asks for in each copy of a program that uses it, under the
-// page's footer (the page's own footer already carries Reown's notice for WalletConnect).
+// Under the page's footer: the app's third-party notices and its privacy policy (the page's own footer
+// already carries Reown's notice for WalletConnect).
 const NOTICES = "https://github.com/ChainIntegrate/up-wallet-android/blob/main/THIRD_PARTY_NOTICES.md";
 const PRIVACY = "https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html";
 function addNotice() {
@@ -356,9 +345,7 @@ function addNotice() {
   const pa = document.createElement("a");
   pa.target = "_blank"; pa.rel = "noopener";
   const fill = () => {
-    d.textContent = en()
-      ? "UP Wallet app: uses MetaMask Connect, © ConsenSys Software Inc., under ConsenSys' license (non-commercial use or up to 10,000 monthly active users). "
-      : "App UP Wallet: usa MetaMask Connect, © ConsenSys Software Inc., con la licenza di ConsenSys (uso non commerciale o fino a 10.000 utenti attivi al mese). ";
+    d.textContent = en() ? "UP Wallet app: " : "App UP Wallet: ";
     a.textContent = en() ? "Third-party notices" : "Componenti di terzi";
     pa.href = PRIVACY + (en() ? "?lang=en" : "");
     pa.textContent = "Privacy";
