@@ -11,8 +11,18 @@ page, connects to dApps through WalletConnect links (pasted, opened with the app
 scanned from a QR code), has the site relayer pay the gas (the page's card says who pays, site or
 controller, and changes it with a tap), notifies dApp requests that arrive in the background, stays running while a
 dApp is connected and goes back to the dApp. Sending from the UP (currency, tokens, NFTs) was tested
-on Base, Polygon and LUKSO. APKs are signed with the release key (section Signing). No store release
-yet. See "Still to do" below.
+on Base, Polygon and LUKSO. The phone key (0.9.0) was tested live on Base (a hup.social post, gas paid
+by the site relayer), Arc and LUKSO (the phone key paying the gas); since 0.9.2 the app keeps several
+UPs and switches among them from the card. APKs are signed with the release key (section Signing). No
+store release yet. See "Still to do" below.
+
+**Not an official LUKSO product**: an independent, open-source project by ChainIntegrate, free to use at
+one's own risk (the app warns at its first start). Everything the app runs is in this repository and in
+[Cross_Chain](https://github.com/ChainIntegrate/Cross_Chain), whose README has the links to the website
+and its tools, and whose `AUDIT.md` publishes every review with its open items. **Help:** when the
+wallet meets a call it cannot explain, it offers to copy the call's data or to e-mail it; sending it
+lets the next version decode that call for everyone. Bugs as GitHub issues; security problems privately,
+as in Cross_Chain's [SECURITY.md](https://github.com/ChainIntegrate/Cross_Chain/blob/main/SECURITY.md).
 
 **Download**: the APK of each version is attached to its
 [release](https://github.com/ChainIntegrate/up-wallet-android/releases). On the phone, open the
@@ -179,7 +189,7 @@ To take a newer version of the page, change the commit in `UPSTREAM.json`.
 `versionName` is `major.minor.patch`; `versionCode` (in `android/app/build.gradle`) goes up by 1 with
 every published build, whatever the name. The release tag is `v<versionName>`.
 
-- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.8.x.
+- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.9.x.
 - **patch** (0.8.0 → 0.8.1): fixes and small additions, and a page update from Cross_Chain.
 - **minor** for the intermediate milestones:
   - **0.8.0** (done): call decoding from any verified contract's ABI (Base, Arbitrum One, Arc), contracts
@@ -203,7 +213,8 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   3. the privacy policy and the terms are final, with no "beta" or "in testing";
   4. signing with the phone key, connecting to dApps (link, share, QR), sending from the UP and the gas
      paid by the site work on the phone with no open problem (see "Still to do");
-  5. a professional audit of the app, its phone key included (Cross_Chain's roadmap).
+  5. an external review of the app, its phone key included (the next one: Cross_Chain's `AUDIT.md`
+     section 14), with no open High or Medium finding.
 - After 1.0.0: major for changes that break what users rely on (for example a new data format on the
   phone), minor for new features, patch for fixes.
 
@@ -228,7 +239,9 @@ two Info items: the `uuid` advisory reaching the app through `@metamask/connect-
 intent, only on the user's tap, with dangerous schemes filtered). The High found in that review (W-H1:
 32-byte signatures refused only on the chosen network) was in the bundled page; the app carries the fix
 from 0.7.15. The phone key (0.9.0: `PhoneKeyPlugin.java`, `Secp256k1.java`, `app/phone-key.js`) has not
-been reviewed yet: it is in the professional audit planned before a store release (Cross_Chain's roadmap).
+been reviewed yet: it is in the scope of the next external review (Cross_Chain's `AUDIT.md`, section 14).
+A professional audit is planned for the gas relay when its paid service has significant users or funds
+(Cross_Chain's roadmap), not for the app.
 
 The items still open after that review were fixed in Cross_Chain on 2026-10-19 (`AUDIT.md`, rev. 12),
 and the app carries them from 0.7.25: WalletConnect telemetry off and the WalletConnect bundle loaded
@@ -294,6 +307,6 @@ notices in place. Before a Play Store release:
 - optionally a separate Reown project for the app (own quota and statistics);
 - the store's data safety and financial features forms for a non-custodial wallet that keeps a key on
   the phone (the privacy policy already describes it, since 0.9.0);
-- the professional audit of the app, its phone key included;
+- the external review of the app, its phone key included, with no open High or Medium finding;
 - the "special use" foreground service (`KeepAliveService`, Android 14+) needs a declaration in the
   Play Console explaining the use (the text is in the manifest's `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`).
