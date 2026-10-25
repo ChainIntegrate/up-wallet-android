@@ -4,9 +4,10 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **prototype (0.8.2), phases 1-4 done**, tested on an Android phone (ColorOS) with OpenSea,
-Uniswap and hup.social on Base, Arc and LUKSO: the app installs, shows the page, uses MetaMask mobile
-to sign, connects to dApps through WalletConnect links (pasted, opened with the app, shared to it or
+Status: **prototype (0.9.x)**. Since 0.9.0 the app is the wallet: it signs with a key kept on the
+phone (section "The phone key"); up to 0.8.x it signed through MetaMask mobile. Tested on an Android
+phone (ColorOS) with OpenSea, Uniswap and hup.social on Base, Arc and LUKSO: the app installs, shows the
+page, connects to dApps through WalletConnect links (pasted, opened with the app, shared to it or
 scanned from a QR code), has the site relayer pay the gas (the page's card says who pays, site or
 controller, and changes it with a tap), notifies dApp requests that arrive in the background, stays running while a
 dApp is connected and goes back to the dApp. Sending from the UP (currency, tokens, NFTs) was tested
@@ -19,27 +20,29 @@ yet. See "Still to do" below.
 unknown, choose "More details" → "Install anyway" (the app is not on the Play Store). Play Protect may
 also offer to scan the app at an update: the scan is Google's check of apps from developers it has
 not verified yet, not a change in the app (see [docs/developer-verification.md](docs/developer-verification.md)).
-Updates install over the previous version, keeping its data. You need MetaMask mobile, with your Universal Profile's
-controller account in it. The site's guide has the same steps.
+Updates install over the previous version, keeping its data. You need a Universal Profile with an
+admin controller you can use on a computer (for example in MetaMask), to authorize the phone key once
+on each network. The site's guide has the same steps.
 
-## 0.9.0: the app becomes the wallet (in progress, branch `v0.9`)
+## The phone key (since 0.9.0)
 
-> **⚠️ Experimental: the maintainer's own wallet.** From 0.9.0 the app keeps a signing key on the phone.
+> **⚠️ Experimental: the maintainer's own wallet.** The app keeps a signing key on the phone.
 > That is a higher risk than signing in an external wallet: whoever can unlock the phone and pass its
 > fingerprint or PIN can sign with that key. Use it only if you understand how a Universal Profile's
 > controllers and permissions work, with small amounts, at your own risk. MIT license: no warranty.
 
-What changes:
-- **MetaMask leaves the app.** A dApp connects through WalletConnect (link, share or QR, as today) and
-  the app signs by itself: no other app in between.
-- **A new key, created on the phone at first start.** It never leaves the phone: it is encrypted with
+How it works:
+- **No MetaMask in the app.** A dApp connects through WalletConnect (link, share or QR) and the app
+  signs by itself: no other app in between.
+- **A new key, created on the phone** the first time "Use the phone key" is pressed. It never leaves the phone: it is encrypted with
   the Android Keystore (the phone's secure hardware where there is one), used only after fingerprint or
   PIN, **for every signature**, and the signature is made in the app's native code, so the page never
   sees the key. There is no seed phrase and no copy: app data is not backed up (`allowBackup="false"`),
   and uninstalling the app or losing the phone loses the key. That is handled by revoking it.
 - **Authorized once per network, from the site.** The app shows the key's address (copy, QR). On a
   computer, the site's **Backup** page, "Authorize a phone", adds it as a controller of the UP on that
-  network, signed by an admin controller in MetaMask, with **limited permissions**:
+  network, signed by an admin controller of the UP (for example in MetaMask on the computer), with
+  **limited permissions**:
 
   | Permission | For |
   |---|---|
@@ -50,13 +53,14 @@ What changes:
 
   Never adding controllers, editing permissions or extensions: those stay with the admin keys (the
   genesis key, the backup). The same page revokes a lost phone's key, network by network.
-- **Everything else stays**: the request window, its checks and simulation, the gas relay, sending from
-  the UP, notifications, "Back to the dApp".
+- **The page is the same as the site's**: the request window, its checks and simulation, the gas relay,
+  sending from the UP, notifications, "Back to the dApp". Its texts name the phone key and the
+  fingerprint instead of MetaMask (`html.phone-key`, set by `app/phone-key.js`).
 - A warning at the first start, until accepted, with the text above.
 
-Release: from the branch `v0.9`, pinned to Cross_Chain's open pull request; `main` stays on 0.8.2 until
-0.9.0 works on the phone. If 0.9.0 has to be withdrawn after it was installed, 0.9.1 republishes
-0.8.2's code with a higher `versionCode` (Android does not install an older version over a newer one).
+First tested on the phone on 2026-10-25: the key created in the Keystore, authorized on Base from the
+Backup page, a hup.social post signed with the fingerprint and sent by the site relayer (gas paid by
+the paymaster).
 
 Privacy policy: [up-wallet-app-privacy.html](https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html)
 on the site.
@@ -77,12 +81,14 @@ on the site.
   injected at document start by the WebView, outside the page's policy; only a WebView too old for that
   (without `DOCUMENT_START_SCRIPT`) would fall back to an inline script that the policy blocks, and the
   native features would not work there.
-- `app/metamask.js` (bundled with esbuild): MetaMask mobile as the page's signing wallet. It is
-  announced to the page through EIP-6963 as "MetaMask (app)", the way the browser extension is, and
-  backed by MetaMask Connect (`@metamask/connect-evm`), which reaches the MetaMask app through
-  MetaMask's relay and opens it with `metamask://` links for each confirmation. Analytics are off.
-  Networks MetaMask does not know (LUKSO among them) are added with their parameters from `chains.js`
-  when the page switches to them. The page code does not change.
+- `app/phone-key.js` (bundled with esbuild): the phone key as the page's signing wallet, announced to
+  the page through EIP-6963 as "Phone key (UP Wallet)", the way the browser extension is. It builds what
+  is signed (the EIP-191 digest of a message, the EIP-712 digest of typed data, a transaction's hash) and
+  asks the native `PhoneKey` plugin (`PhoneKeyPlugin.java`, `Secp256k1.java`) for the signature, which
+  asks for the fingerprint or PIN each time; signed transactions go to the network's RPC. It follows the
+  network chosen in the page. It also shows the first-start warning and, under panel 3's button, "This
+  phone": the key's address (copy, QR), the link to the site's Backup page with phone, UP and network
+  filled in, and "Delete the phone key".
 - `app/native.js` (bundled): a Paste button for the WalletConnect link; a `wc:` link opened with the
   app or text shared to it (Share -> UP Wallet) is put in the link field (the native side is
   `IncomingLinkPlugin.java`); connecting still takes a tap on the page's button. The UP address and
@@ -104,7 +110,7 @@ on the site.
 - Panel 3 has a hint and a button to Android's settings of the "dApp requests" notifications: some
   phones (ColorOS among them) keep pop-up notifications off for apps installed from an APK.
 - A dApp request that arrives while UP Wallet is in the background shows a notification (Capacitor
-  Local Notifications; Android asks for the permission when you connect MetaMask or a dApp): a tap
+  Local Notifications; Android asks for the permission when you connect the phone key or a dApp): a tap
   brings UP Wallet to the front. Once the dApp has its answer, a "Back to the dApp" button returns to
   it as above (the default browser comes back on the tab it was showing).
 - While a dApp is connected, the app stays running (`KeepAliveService`, a foreground service with an
@@ -124,16 +130,11 @@ on the site.
   back to: "Back to the dApp" stays hidden.
 - Panel 2 has no "Read the address from the UP extension" button: it needs the LUKSO browser
   extension, which a phone does not have. The address is typed or pasted, and remembered.
-- Under the page's footer, the notice MetaMask Connect's license asks for, with links to the
-  third-party notices and to the privacy policy.
+- Under the page's footer, links to the third-party notices and to the privacy policy.
 - A diagnostic log (`app/diag.js`, at most 300 lines, kept on the phone): app start, foreground and
-  background, MetaMask requests and their outcome, dApp requests, notifications. No messages,
+  background, phone key signatures and their outcome, dApp requests, notifications. No messages,
   amounts, signatures or addresses. Shown at the bottom of the page with Copy and Clear buttons.
-- Panel 3 suggests MetaMask's Auto-lock at 5 minutes: when MetaMask locks with a request open, it
-  drops it and the page gets "User rejected".
 - The WalletConnect metadata shown to dApps names the site and its icon, not the app's origin.
-- A MetaMask connection kept for fewer networks than asked is dropped before connecting (MetaMask
-  answered "connection not found" to the old one).
 - ethers is bundled from the npm package, checked against the page's own SRI hash; nothing is loaded
   from a CDN.
 - The Alchemy API key (token lists in the send panel) is the site's, given to the build as the
@@ -145,15 +146,10 @@ on the site.
 - The app's origin is `https://upwallet.chainintegrate.it` (`server.hostname` in `capacitor.config.json`):
   a name we own, served by the app itself (no DNS record needed), so the Reown allowlist names only us.
   `localhost` is no longer in the allowlist: older builds (origin `https://localhost`) cannot connect to dApps.
-- A MetaMask connection resumed from storage may bring back the network used before; before each request
-  the connection is put back on the page's network when that network is approved (a local change).
-- A MetaMask connection removed in MetaMask (its connected apps) stays stored in the app, and MetaMask
-  Connect resumes it without opening MetaMask: requests then never reach MetaMask. When Connect MetaMask
-  resumes a connection without opening MetaMask, or opens nothing for 15 s, the log says so, and a
-  "Connect MetaMask from scratch" button (under Connect MetaMask) drops the stored connection and reloads
-  the page; network and UP are kept, dApp sessions too. The next Connect MetaMask makes a new connection.
 
-The app holds no keys: signing stays in MetaMask. Backups of app data are off (`allowBackup="false"`).
+The phone key is the only key the app holds (section "The phone key"). Backups of app data are off
+(`allowBackup="false"`). Up to 0.8.x the app held no keys and signed through MetaMask mobile (MetaMask
+Connect).
 
 ## Build
 
@@ -192,7 +188,8 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   - **0.8.2** (patch): page batch of 2026-10-23 (Aave and CoW decoding, positions in "Every network",
     the UP's profile picture, the controller as fallback when the site relayer cannot take an
     operation); in the app, an error of a dApp request is notified when the app is in the background;
-  - **0.9.0** (in progress): the phone key replaces MetaMask (section above);
+  - **0.9.0** (done): the phone key replaces MetaMask (section "The phone key");
+  - **0.9.1** (patch): the gas relay's texts name the phone key too;
   - **0.9.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
@@ -224,11 +221,12 @@ possible (users would have to uninstall and lose the app's data).
 
 The app was in the scope of the AI-assisted review of 2026-10-12 (Cross_Chain `AUDIT.md`, section 13):
 manifest, the Java plugins and the native bridge (`app/*.js`). No finding on the app's own code beyond
-two Info items: the `uuid` advisory reaching the app through `@metamask/connect-evm` (no upstream fix
-yet; negligible for this use), and "Back to the dApp" opening a link the dApp announces (a plain VIEW
+two Info items: the `uuid` advisory reaching the app through `@metamask/connect-evm` (gone since
+0.9.0, which no longer contains MetaMask Connect), and "Back to the dApp" opening a link the dApp announces (a plain VIEW
 intent, only on the user's tap, with dangerous schemes filtered). The High found in that review (W-H1:
 32-byte signatures refused only on the chosen network) was in the bundled page; the app carries the fix
-from 0.7.15.
+from 0.7.15. The phone key (0.9.0: `PhoneKeyPlugin.java`, `Secp256k1.java`, `app/phone-key.js`) has not
+been reviewed yet: it is in the professional audit planned before a store release (Cross_Chain's roadmap).
 
 The items still open after that review were fixed in Cross_Chain on 2026-10-19 (`AUDIT.md`, rev. 12),
 and the app carries them from 0.7.25: WalletConnect telemetry off and the WalletConnect bundle loaded
@@ -239,7 +237,7 @@ by the build (N-3, see "What the app adds to the page"); signatures not made out
 ## License
 
 MIT for this repository's code ([LICENSE](LICENSE)). The APK also contains third-party code under
-other terms, MetaMask Connect and the WalletConnect bundle among them: see
+other terms, the WalletConnect bundle and Bouncy Castle among them: see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Still to do
@@ -258,18 +256,10 @@ Open from the phone tests:
   decodes hup's posts, replies and likes on LUKSO too, LSP26 follows and hup's chat sign-in. Still to check: whether hup honours the `upwallet://` link
   UP Wallet announces, and whether sharing hup's link to UP Wallet (instead of pasting it) gives a
   referrer.
-- **Way back from MetaMask**: after confirming, the user returns to UP Wallet by hand (MetaMask does
-  not return to the calling app). Look for a MetaMask Connect option or a return link, if any.
-- **MetaMask cancels open requests when it locks** (auto-lock shorter than the time to read and
-  confirm, 30 s in the tests): the page shows "User rejected". The app suggests 5 minutes; a clearer
-  message for an unexpected 4001 (rejected without the user's tap) could follow.
 - **Aave Pro on Arc** (pro.aave.com): the deposit stops inside Aave, before any request reaches the
   wallet, because Aave estimates gas through its own Arc node (`rpc.arc-scan.org`), which refuses
   web pages (CORS). Since 0.8.1 the page checks that node at connection and says the block is on
   Aave's side; the note goes away by itself once the node answers. On Base, Aave Pro works.
-- **Sign-in requests**: MetaMask always shows "Suspicious sign-in request" with two confirmations,
-  because the request comes from UP Wallet, not from the dApp's site. Expected; explained in the
-  page (Cross_Chain#123). Nothing to fix unless MetaMask changes.
 
 Improvements (changes to the page itself are collected in Cross_Chain's
 [WALLET-BACKLOG.md](https://github.com/ChainIntegrate/Cross_Chain/blob/main/WALLET-BACKLOG.md) and made in batches):
@@ -279,17 +269,13 @@ Improvements (changes to the page itself are collected in Cross_Chain's
 - A dApp on a chain other than the one chosen in the page (OpenSea's cross-chain checkout) is refused
   by design: one UP, one network per session. Since 0.8.1 a switch request is refused with 4001 and the
   dApp is told the session's network, and the log says which network to choose in the dApp.
-- iPhone: not started (needs an Apple developer account and a review; MetaMask Connect and
-  WalletConnect work there too, the native parts differ).
+- iPhone: not started (needs an Apple developer account and a review; WalletConnect works there too,
+  the native parts differ: the Secure Enclave would keep the phone key).
 - Listing in Reown's wallet registry, so that dApps show UP Wallet in their list (needs a store
   release first).
 
 Prototype parts to decide on before a release:
-- The diagnostic log (`app/diag.js`) and the "MetaMask opened" lines in the page's log: keep (useful
-  for support), hide behind a setting, or remove.
-- The build patches to MetaMask Connect (request timeout 5 minutes, connection renewed on focus,
-  `scripts/build-web.js`): check them at every MetaMask Connect update (the build fails if they no
-  longer apply).
+- The diagnostic log (`app/diag.js`): keep (useful for support), hide behind a setting, or remove.
 
 ## Before a store release
 
@@ -305,9 +291,7 @@ notices in place. Before a Play Store release:
   entity once it exists; the server keeps its logs no longer than the policy says (30 days);
 - optionally a separate Reown project for the app (own quota and statistics);
 - the store's data safety and financial features forms for a non-custodial wallet that keeps a key on
-  the phone, and the privacy policy updated for it (0.9.0);
-- **licenses**: up to 0.8.x, MetaMask Connect (non-commercial use or up to 10,000 monthly active users);
-  from 0.9.0 it is no longer in the app (THIRD_PARTY_NOTICES.md to update);
-- remove or keep, by choice, the "MetaMask opened" lines in the log (added for the prototype tests);
+  the phone (the privacy policy already describes it, since 0.9.0);
+- the professional audit of the app, its phone key included;
 - the "special use" foreground service (`KeepAliveService`, Android 14+) needs a declaration in the
   Play Console explaining the use (the text is in the manifest's `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`).

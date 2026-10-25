@@ -1,6 +1,6 @@
 // UP Wallet app (prototype): a diagnostic log that survives app restarts, to tell apart what happens
-// when the app goes to MetaMask and back: app start, leaving and coming back, MetaMask openings,
-// requests to MetaMask and their outcome, requests from dApps. Only names and outcomes: no messages,
+// in the background: app start, leaving and coming back, the phone key's signatures and their outcome,
+// requests from dApps, notifications. Only names and outcomes: no messages,
 // signatures or amounts. Kept on the phone (the app's storage), last 300 lines; shown at the bottom of
 // the page with a Copy button.
 (function () {

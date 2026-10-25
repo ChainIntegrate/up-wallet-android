@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main, v0.9]   # v0.9: the phone key, built before its release
+    branches: [main]
   release:
     types: [published]
   pull_request:
