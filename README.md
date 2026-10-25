@@ -190,6 +190,8 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     operation); in the app, an error of a dApp request is notified when the app is in the background;
   - **0.9.0** (done): the phone key replaces MetaMask (section "The phone key");
   - **0.9.1** (patch): the gas relay's texts name the phone key too;
+  - **0.9.2** (patch): switching among the UPs saved on the phone, from the card (one phone key can be
+    authorized on several UPs);
   - **0.9.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
