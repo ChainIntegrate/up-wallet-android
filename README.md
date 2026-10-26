@@ -52,7 +52,8 @@ How it works:
 - **Authorized once per network, from the site.** The app shows the key's address (copy, QR). On a
   computer, the site's **Backup** page, "Authorize a phone", adds it as a controller of the UP on that
   network, signed by an admin controller of the UP (for example in MetaMask on the computer), with
-  **limited permissions**:
+  **no admin permissions, but access to all the UP's funds** (whoever unlocks the phone and passes the
+  fingerprint or PIN can move them):
 
   | Permission | For |
   |---|---|
@@ -202,6 +203,10 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   - **0.9.1** (patch): the gas relay's texts name the phone key too;
   - **0.9.2** (patch): switching among the UPs saved on the phone, from the card (one phone key can be
     authorized on several UPs);
+  - **0.9.3** (patch): fixes of the 2026-10-26 external review: the phone key refuses opaque 32-byte
+    messages itself and signs gas-relay operations from the operation (`upwallet_signUserOperation`);
+    the fingerprint prompt says what is signed; only read methods reach the network's RPC; the page's
+    fixes (wording of the phone key's permissions, the gas relay box when the key is not a controller);
   - **0.9.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
@@ -213,8 +218,8 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   3. the privacy policy and the terms are final, with no "beta" or "in testing";
   4. signing with the phone key, connecting to dApps (link, share, QR), sending from the UP and the gas
      paid by the site work on the phone with no open problem (see "Still to do");
-  5. an external review of the app, its phone key included (the next one: Cross_Chain's `AUDIT.md`
-     section 14), with no open High or Medium finding.
+  5. an external review of the app, its phone key included, with no open High or Medium finding: done
+     on 2026-10-26 (Cross_Chain's `AUDIT.md` section 15), its findings fixed in 0.9.3.
 - After 1.0.0: major for changes that break what users rely on (for example a new data format on the
   phone), minor for new features, patch for fixes.
 
@@ -238,10 +243,12 @@ two Info items: the `uuid` advisory reaching the app through `@metamask/connect-
 0.9.0, which no longer contains MetaMask Connect), and "Back to the dApp" opening a link the dApp announces (a plain VIEW
 intent, only on the user's tap, with dangerous schemes filtered). The High found in that review (W-H1:
 32-byte signatures refused only on the chosen network) was in the bundled page; the app carries the fix
-from 0.7.15. The phone key (0.9.0: `PhoneKeyPlugin.java`, `Secp256k1.java`, `app/phone-key.js`) has not
-been reviewed yet: it is in the scope of the next external review (Cross_Chain's `AUDIT.md`, section 14).
-A professional audit is planned for the gas relay when its paid service has significant users or funds
-(Cross_Chain's roadmap), not for the app.
+from 0.7.15. The phone key (0.9.0: `PhoneKeyPlugin.java`, `Secp256k1.java`, `app/phone-key.js`) was reviewed in the
+external AI-assisted review of 2026-10-26 (Cross_Chain `AUDIT.md`, section 15): "well engineered", no
+Critical or High. Its Low items are fixed in 0.9.3: the key's own refusal of opaque 32-byte messages, with
+gas-relay operations signed from the operation itself (PK-2); the fingerprint prompt showing what is signed
+(PK-4); only read methods forwarded to the RPC. A professional audit is planned for the gas relay when
+its paid service has significant users or funds (Cross_Chain's roadmap), not for the app.
 
 The items still open after that review were fixed in Cross_Chain on 2026-10-19 (`AUDIT.md`, rev. 12),
 and the app carries them from 0.7.25: WalletConnect telemetry off and the WalletConnect bundle loaded
@@ -307,6 +314,6 @@ notices in place. Before a Play Store release:
 - optionally a separate Reown project for the app (own quota and statistics);
 - the store's data safety and financial features forms for a non-custodial wallet that keeps a key on
   the phone (the privacy policy already describes it, since 0.9.0);
-- the external review of the app, its phone key included, with no open High or Medium finding;
+- the external review of the app, its phone key included: done on 2026-10-26, fixed in 0.9.3;
 - the "special use" foreground service (`KeepAliveService`, Android 14+) needs a declaration in the
   Play Console explaining the use (the text is in the manifest's `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`).

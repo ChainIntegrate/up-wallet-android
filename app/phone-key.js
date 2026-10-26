@@ -51,6 +51,18 @@ const T = {
   promptDesc: () => (en() ? "The key stays on this phone, encrypted. It signs only after your confirmation." : "La chiave resta su questo telefono, cifrata. Firma solo dopo la tua conferma."),
   cancel: () => (en() ? "Cancel" : "Annulla"),
   signMsg: () => (en() ? "Sign a message" : "Firma di un messaggio"),
+  msgBytes: (n, h) => (en() ? `${n} bytes, not text: ${h}` : `${n} byte, non testo: ${h}`),
+  typedDomain: (name, chain, contract) => [name, chain ? (en() ? `chain ${chain}` : `rete ${chain}`) : "", contract ? (en() ? `contract ${contract}` : `contratto ${contract}`) : ""].filter(Boolean).join(" · "),
+  txData: (sel) => (sel ? (en() ? `Calls the function ${sel}` : `Chiama la funzione ${sel}`) : (en() ? "No data: a plain transfer" : "Nessun dato: un semplice invio")),
+  signOp: (net) => (en() ? `Operation of the UP on ${net}` : `Operazione della UP su ${net}`),
+  opWhat: (up, what) => (en() ? `UP ${up}: ${what}. Gas paid by the site.` : `UP ${up}: ${what}. Gas pagato dal sito.`),
+  opCall: (to, v, sel) => (en() ? `to ${to}` : `verso ${to}`) + (v ? `, ${v}` : "") + (sel ? (en() ? `, function ${sel}` : `, funzione ${sel}`) : ""),
+  opBatch: (n) => (en() ? `${n} calls in one operation` : `${n} chiamate in un'operazione`),
+  opOther: (sel) => (en() ? `UP function ${sel}` : `funzione della UP ${sel}`),
+  opaque32: () => (en()
+    ? "The phone key does not sign an opaque 32-byte message: it could authorize an operation of the UP on another network."
+    : "La chiave del telefono non firma un messaggio opaco di 32 byte: potrebbe autorizzare un'operazione della UP su un'altra rete."),
+  badOp: (why) => (en() ? `Operation not signed: ${why}` : `Operazione non firmata: ${why}`),
   signTyped: (p) => (en() ? `Sign typed data (${p})` : `Firma di dati strutturati (${p})`),
   signTx: (net, to, v) => (en() ? `Transaction on ${net} to ${to}${v ? `, ${v}` : ""}` : `Transazione su ${net} verso ${to}${v ? `, ${v}` : ""}`),
   noSite: () => (en() ? "No network chosen in the page." : "Nessuna rete scelta nella pagina."),
@@ -118,12 +130,13 @@ async function ensureKey() {
   renderPanel();
   return address;
 }
-async function signDigest(digest, subtitle) {
+async function signDigest(digest, subtitle, detail) {
   if (!address) await status();
   if (!address) throw rpcError(4100, T.none());
   const t0 = Date.now();
   try {
-    const r = await PK.sign({ digest, title: "UP Wallet", subtitle, description: T.promptDesc(), cancel: T.cancel() });
+    // The fingerprint prompt says what is signed, from the signed data itself (AUDIT 2026-10-26 PK-4).
+    const r = await PK.sign({ digest, title: "UP Wallet", subtitle, description: detail || T.promptDesc(), cancel: T.cancel() });
     diag(`PhoneKey: signed (${Math.round((Date.now() - t0) / 1000)} s)`);
     return r.signature;
   } catch (e) {
@@ -135,12 +148,73 @@ const sameAddr = (a) => typeof a === "string" && ethers.isAddress(a) && address 
 
 // ---- what is signed
 function messageBytes(m) { return typeof m === "string" && ethers.isHexString(m) ? ethers.getBytes(m) : ethers.toUtf8Bytes(String(m)); }
+// One line of untrusted text for the fingerprint prompt: no control characters, clipped.
+const oneLine = (t, n) => { const c = String(t).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g, " ").trim(); return c.length > n ? c.slice(0, n - 1) + "…" : c; };
+function messagePreview(bytes) {
+  try {
+    const txt = ethers.toUtf8String(bytes);
+    if (!/[\u0000-\u0008\u000e-\u001f]/.test(txt)) return `"${oneLine(txt, 220)}"`;
+  } catch (e) { /* not UTF-8 */ }
+  const h = ethers.hexlify(bytes);
+  return T.msgBytes(bytes.length, h.length > 24 ? `${h.slice(0, 12)}…${h.slice(-8)}` : h);
+}
 async function personalSign(params) {
   const [m, a] = params || [];
   // Some dApps send (address, message): accept either order, never another account.
   const msg = sameAddr(m) && !sameAddr(a) ? a : m, who = sameAddr(m) && !sameAddr(a) ? m : a;
   if (!sameAddr(who)) throw rpcError(4100, "not the phone key's account");
-  return signDigest(ethers.hashMessage(messageBytes(msg)), T.signMsg());
+  const bytes = messageBytes(msg);
+  // A 32-byte message may be an operation hash: signed, it authorizes an operation of the UP wherever the phone
+  // key has the 4337 permission (AUDIT 2026-10-02 H-2). The page refuses it too; this is the key's own guard
+  // (AUDIT 2026-10-26 PK-2). The page's gas relay signs operations with upwallet_signUserOperation instead.
+  if (bytes.length === 32) throw rpcError(4100, T.opaque32());
+  return signDigest(ethers.hashMessage(bytes), T.signMsg(), messagePreview(bytes));
+}
+
+// ---- an ERC-4337 operation of the UP (the site relayer pays the gas): the hash is computed here, from the
+// operation, as EntryPoint v0.6 does, so the key signs a known operation and never an opaque 32 bytes.
+const ENTRY_POINT = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+const UP_IFACE = new ethers.Interface(["function execute(uint256,address,uint256,bytes)", "function executeBatch(uint256[],address[],uint256[],bytes[])"]);
+function userOpHash(op, chainId) {
+  const enc = (t, v) => ethers.AbiCoder.defaultAbiCoder().encode(t, v);
+  const packed = enc(
+    ["address", "uint256", "bytes32", "bytes32", "uint256", "uint256", "uint256", "uint256", "uint256", "bytes32"],
+    [op.sender, op.nonce, ethers.keccak256(op.initCode), ethers.keccak256(op.callData), op.callGasLimit,
+      op.verificationGasLimit, op.preVerificationGas, op.maxFeePerGas, op.maxPriorityFeePerGas, ethers.keccak256(op.paymasterAndData)]);
+  return ethers.keccak256(enc(["bytes32", "address", "uint256"], [ethers.keccak256(packed), ENTRY_POINT, chainId]));
+}
+function opSummary(op, net) {
+  let what;
+  try {
+    const d = UP_IFACE.parseTransaction({ data: op.callData });
+    if (d.name === "execute") {
+      const [, to, value, data] = d.args;
+      const v = value > 0n ? `${ethers.formatEther(value)} ${net.currency || ""}`.trim() : "";
+      what = T.opCall(short(to), v, ethers.dataLength(data) >= 4 ? ethers.dataSlice(data, 0, 4) : "");
+    } else what = T.opBatch(d.args[1].length);
+  } catch (e) { what = T.opOther(ethers.dataLength(op.callData) >= 4 ? ethers.dataSlice(op.callData, 0, 4) : "0x"); }
+  return T.opWhat(short(op.sender), what);
+}
+async function signUserOperation(params) {
+  const { op: raw, entryPoint, chainId } = (params || [])[0] || {};
+  const net = currentNet();
+  if (!net) throw rpcError(4100, T.noSite());
+  if (!raw || typeof raw !== "object") throw rpcError(-32602, T.badOp("no operation"));
+  if (!entryPoint || !ethers.isAddress(entryPoint) || ethers.getAddress(entryPoint) !== ENTRY_POINT) throw rpcError(-32602, T.badOp("not EntryPoint v0.6"));
+  if (Number(chainId) !== net.chainId) throw rpcError(4901, T.badOp(`chain ${Number(chainId)}, the page is on ${net.chainId}`));
+  const hex = (v) => { if (!ethers.isHexString(v)) throw rpcError(-32602, T.badOp("malformed bytes")); return v; };
+  const op = {
+    sender: ethers.getAddress(raw.sender), nonce: BigInt(raw.nonce), initCode: hex(raw.initCode), callData: hex(raw.callData),
+    callGasLimit: BigInt(raw.callGasLimit), verificationGasLimit: BigInt(raw.verificationGasLimit), preVerificationGas: BigInt(raw.preVerificationGas),
+    maxFeePerGas: BigInt(raw.maxFeePerGas), maxPriorityFeePerGas: BigInt(raw.maxPriorityFeePerGas), paymasterAndData: hex(raw.paymasterAndData),
+  };
+  // The operation must be for the UP chosen in the page.
+  const upEl = $("upAddress");
+  const up = upEl && ethers.isAddress(upEl.value.trim()) ? ethers.getAddress(upEl.value.trim()) : null;
+  if (!up || op.sender !== up) throw rpcError(4100, T.badOp("not the UP chosen in the page"));
+  const hash = userOpHash(op, net.chainId);
+  // Extension4337 checks a personal_sign of the operation hash.
+  return signDigest(ethers.hashMessage(ethers.getBytes(hash)), T.signOp(net.name), opSummary(op, net));
 }
 async function signTyped(params) {
   const [a, data] = params || [];
@@ -149,7 +223,9 @@ async function signTyped(params) {
   const types = { ...(j.types || {}) };
   delete types.EIP712Domain;
   const digest = ethers.TypedDataEncoder.hash(j.domain || {}, types, j.message || {});
-  return signDigest(digest, T.signTyped(String(j.primaryType || "").replace(/[^\w]/g, "").slice(0, 40) || "EIP-712"));
+  const dom = j.domain || {};
+  return signDigest(digest, T.signTyped(String(j.primaryType || "").replace(/[^\w]/g, "").slice(0, 40) || "EIP-712"),
+    T.typedDomain(oneLine(dom.name || "", 60), dom.chainId != null && /^(0x[0-9a-f]+|\d+)$/i.test(String(dom.chainId)) ? BigInt(dom.chainId).toString() : "", dom.verifyingContract && ethers.isAddress(dom.verifyingContract) ? short(ethers.getAddress(dom.verifyingContract)) : "") || undefined);
 }
 const big = (v) => (v === undefined || v === null || v === "" ? null : BigInt(v));
 async function sendTransaction(params) {
@@ -171,13 +247,17 @@ async function sendTransaction(params) {
   }
   const t = ethers.Transaction.from({ ...base, nonce, gasLimit, chainId: net.chainId, ...fees });
   const value = base.value > 0n ? `${ethers.formatEther(base.value)} ${net.currency || ""}`.trim() : "";
-  const sig = await signDigest(t.unsignedHash, T.signTx(net.name, base.to ? short(base.to) : "—", value));
+  const sig = await signDigest(t.unsignedHash, T.signTx(net.name, base.to ? short(base.to) : "—", value),
+    T.txData(ethers.dataLength(base.data) ? ethers.dataSlice(base.data, 0, Math.min(4, ethers.dataLength(base.data))) : ""));
   t.signature = ethers.Signature.from(sig);
   if (ethers.getAddress(t.from) !== address) throw rpcError(-32603, "signature check failed");
   return rpc.send("eth_sendRawTransaction", [t.serialized]);
 }
 
 // ---- the EIP-1193 provider
+const READS = new Set(["eth_blockNumber", "eth_call", "eth_estimateGas", "eth_feeHistory", "eth_gasPrice", "eth_getBalance",
+  "eth_getBlockByHash", "eth_getBlockByNumber", "eth_getCode", "eth_getLogs", "eth_getStorageAt", "eth_getTransactionByHash",
+  "eth_getTransactionCount", "eth_getTransactionReceipt", "eth_maxPriorityFeePerGas"]);
 const handlers = {};
 function emit(ev, arg) { for (const fn of handlers[ev] || []) { try { fn(arg); } catch (e) { /* a listener's own error */ } } }
 const provider = {
@@ -201,8 +281,11 @@ const provider = {
       case "personal_sign": diag("PhoneKey → personal_sign"); return personalSign(p);
       case "eth_signTypedData_v4": case "eth_signTypedData": diag(`PhoneKey → ${m}`); return signTyped(p);
       case "eth_sendTransaction": diag("PhoneKey → eth_sendTransaction"); return sendTransaction(p);
+      case "upwallet_signUserOperation": diag("PhoneKey → signUserOperation"); return signUserOperation(p);
       case "eth_sign": case "eth_signTransaction": throw rpcError(4200, `${m} is not supported`);
       default: {
+        // Only reads go to the network's RPC (AUDIT 2026-10-26, Info): anything else is not a wallet method.
+        if (!READS.has(m)) throw rpcError(4200, `${m} is not supported`);
         const n = currentNet();
         if (!n) throw rpcError(4100, T.noSite());
         return rpcFor(n).send(m, p || []);

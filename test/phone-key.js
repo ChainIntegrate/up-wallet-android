@@ -51,7 +51,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
       async status() { const w = window.__pk.wallet; return { exists: !!w, address: w ? w.address.toLowerCase() : null, hardware: w ? "tee" : null, canAuth: true }; },
       async create(o) { window.__pk.prompts.push(["create", o.subtitle]); if (window.__pk.cancel) throw Object.assign(new Error("canceled"), { code: "CANCELED" }); window.__pk.wallet = ethers.Wallet.createRandom(); return { address: window.__pk.wallet.address.toLowerCase() }; },
       async sign(o) {
-        window.__pk.prompts.push(["sign", o.subtitle, o.digest]);
+        window.__pk.prompts.push(["sign", o.subtitle, o.digest, o.description]);
         if (window.__pk.cancel) throw Object.assign(new Error("canceled"), { code: "CANCELED" });
         if (!window.__pk.wallet) throw Object.assign(new Error("no key"), { code: "NO_KEY" });
         return { signature: window.__pk.wallet.signingKey.sign(o.digest).serialized };
@@ -96,12 +96,15 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
     const s = await new ethers.BrowserProvider(signerProvider).getSigner();
     const msg = await s.signMessage("hello UP");
     const typed = await s.signTypedData({ name: "T", version: "1", chainId: 8453, verifyingContract: "0x" + "11".repeat(20) }, { Mail: [{ name: "to", type: "address" }, { name: "body", type: "string" }] }, { to: "0x" + "22".repeat(20), body: "hi" });
-    const hash32 = await signerProvider.request({ method: "personal_sign", params: [ethers.hexlify(ethers.randomBytes(32)), s.address] });
-    return { addr: s.address, msg, typed, ok32: ethers.isHexString(hash32, 65), prompts: window.__pk.prompts.slice(1).map((x) => x[1]) };
+    const n0 = window.__pk.prompts.length;
+    let r32; try { await signerProvider.request({ method: "personal_sign", params: [ethers.hexlify(ethers.randomBytes(32)), s.address] }); r32 = "signed"; } catch (e) { r32 = [e.code, e.message]; }
+    return { addr: s.address, msg, typed, r32, asked32: window.__pk.prompts.length !== n0, prompts: window.__pk.prompts.slice(1).map((x) => x[1]), descs: window.__pk.prompts.slice(1).map((x) => x[3]) };
   });
   ck("personal_sign: signed by the phone key (recovers to its address)", ethers.verifyMessage("hello UP", sig.msg) === sig.addr, JSON.stringify(sig));
   ck("eth_signTypedData_v4: EIP-712 digest signed by the phone key", ethers.verifyTypedData({ name: "T", version: "1", chainId: 8453, verifyingContract: "0x" + "11".repeat(20) }, { Mail: [{ name: "to", type: "address" }, { name: "body", type: "string" }] }, { to: "0x" + "22".repeat(20), body: "hi" }, sig.typed) === sig.addr, JSON.stringify(sig));
-  ck("the fingerprint prompt says what is signed", sig.prompts[0] === "Firma di un messaggio" && /Firma di dati strutturati \(Mail\)/.test(sig.prompts[1]) && sig.ok32, JSON.stringify(sig.prompts));
+  ck("the fingerprint prompt says what is signed", sig.prompts[0] === "Firma di un messaggio" && /Firma di dati strutturati \(Mail\)/.test(sig.prompts[1]), JSON.stringify(sig.prompts));
+  ck("PK-4: the prompt shows the message's text, and the typed data's domain (name, chain, contract)", sig.descs[0] === '"hello UP"' && sig.descs[1] === "T · rete 8453 · contratto 0x1111…1111", JSON.stringify(sig.descs));
+  ck("PK-2: an opaque 32-byte message is refused by the key itself, without asking for the fingerprint", Array.isArray(sig.r32) && sig.r32[0] === 4100 && /32 byte/.test(sig.r32[1]) && !sig.asked32, JSON.stringify(sig.r32));
 
   // a transaction: built for the page's network, signed, sent raw to its RPC
   const tx = await p.evaluate(async (TO) => {
@@ -113,6 +116,47 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
   ck("eth_sendTransaction: a signed EIP-1559 transaction for Base, from the phone key, with the page's fields and the RPC's nonce, sent raw",
     raws.length === 1 && t.from === sig.addr && t.chainId === 8453n && t.to === ethers.getAddress(TO) && t.value === 10n ** 16n && t.data === "0x1234" && t.gasLimit === 40000n && t.nonce === 7 && t.type === 2 && tx.hash === ethers.keccak256(raws[0]), JSON.stringify({ raw: raws[0], from: raws[0] && t.from }));
   ck("the prompt names the network, the recipient and the value", /Transazione su Base verso 0x7777…7777, 0\.01 ETH/.test(tx.prompt), tx.prompt);
+  const txDesc = await p.evaluate(() => window.__pk.prompts.at(-1)[3]);
+  ck("PK-4: and the function it calls", txDesc === "Chiama la funzione 0x1234", txDesc);
+
+  // PK-2: an ERC-4337 operation of the UP, through the gas relay client: the key computes the hash itself
+  const EP = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+  const upIface = new ethers.Interface(["function execute(uint256,address,uint256,bytes)"]);
+  const op = { sender: UP, nonce: 3n, initCode: "0x", callData: upIface.encodeFunctionData("execute", [0, TO, 10n ** 16n, "0x12345678"]), callGasLimit: 100000n, verificationGasLimit: 300000n,
+    preVerificationGas: 60000n, maxFeePerGas: 2000000000n, maxPriorityFeePerGas: 1000000n, paymasterAndData: "0x" + "ab".repeat(20), signature: "0x" };
+  const enc = (t, v) => ethers.AbiCoder.defaultAbiCoder().encode(t, v);
+  const opHash = (o, chainId) => ethers.keccak256(enc(["bytes32", "address", "uint256"], [ethers.keccak256(enc(
+    ["address", "uint256", "bytes32", "bytes32", "uint256", "uint256", "uint256", "uint256", "uint256", "bytes32"],
+    [o.sender, o.nonce, ethers.keccak256(o.initCode), ethers.keccak256(o.callData), o.callGasLimit, o.verificationGasLimit, o.preVerificationGas, o.maxFeePerGas, o.maxPriorityFeePerGas, ethers.keccak256(o.paymasterAndData)])), EP, chainId]));
+  const H = opHash(op, 8453n);
+  const ser = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
+  const relay = await p.evaluate(async ([o, H]) => {
+    const op = Object.fromEntries(Object.entries(o).map(([k, v]) => [k, /^\d+$/.test(v) ? BigInt(v) : v]));
+    const prep = { chainId: 8453, op, hash: H, view: {}, sponsor: null };
+    const logs = [];
+    let err = null;
+    try { await GasRelayClient.signAndSend(signerProvider, { chainId: 8453, prep, signer: signerAddress, log: (m) => logs.push(m) }); } catch (e) { err = e.message; }
+    const pr = window.__pk.prompts.at(-1);
+    return { sig: prep.op.signature, logs, err, subtitle: pr[1], desc: pr[3] };
+  }, [ser(op), H]);
+  ck("PK-2: the gas relay has the phone key sign the operation (upwallet_signUserOperation): the signature is the personal_sign of the hash the page computed",
+    ethers.isHexString(relay.sig, 65) && ethers.verifyMessage(ethers.getBytes(H), relay.sig) === sig.addr && relay.logs.some((m) => /firmato/i.test(m)), JSON.stringify(relay));
+  ck("PK-4: its prompt says the operation, the UP, the recipient, the value, the function and who pays the gas", relay.subtitle === "Operazione della UP su Base" && relay.desc === "UP 0x4a26…8c27: verso 0x7777…7777, 0.01 ETH, funzione 0x12345678. Gas pagato dal sito.", JSON.stringify([relay.subtitle, relay.desc]));
+  const opRefusals = await p.evaluate(async ([o]) => {
+    const call = async (x) => { const n = window.__pk.prompts.length; try { await signerProvider.request({ method: "upwallet_signUserOperation", params: [x] }); return "signed"; } catch (e) { return [e.code, window.__pk.prompts.length === n]; } };
+    return {
+      otherUp: await call({ op: { ...o, sender: "0x" + "55".repeat(20) }, entryPoint: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789", chainId: 8453 }),
+      otherEp: await call({ op: o, entryPoint: "0x" + "66".repeat(20), chainId: 8453 }),
+      otherChain: await call({ op: o, entryPoint: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789", chainId: 137 }),
+    };
+  }, [ser(op)]);
+  ck("PK-2: an operation of another UP, for another EntryPoint or another network is refused, without asking for the fingerprint",
+    opRefusals.otherUp[0] === 4100 && opRefusals.otherUp[1] && opRefusals.otherEp[0] === -32602 && opRefusals.otherEp[1] && opRefusals.otherChain[0] === 4901 && opRefusals.otherChain[1], JSON.stringify(opRefusals));
+  const methods = await p.evaluate(async () => {
+    const call = async (m, params) => { try { return await signerProvider.request({ method: m, params }); } catch (e) { return e.code; } };
+    return { bal: await call("eth_getBalance", ["0x" + "77".repeat(20), "latest"]), raw: await call("eth_sendRawTransaction", ["0x00"]), other: await call("debug_traceTransaction", ["0x00"]) };
+  });
+  ck("only read methods reach the network's RPC; others are refused (4200)", methods.bal === "0x" && methods.raw === 4200 && methods.other === 4200, JSON.stringify(methods));
   const wrong = await p.evaluate(async () => { try { await signerProvider.request({ method: "eth_sendTransaction", params: [{ to: "0x" + "77".repeat(20), chainId: "0x89" }] }); return "sent"; } catch (e) { return e.code; } });
   ck("a transaction for another network than the page's is refused (4901)", wrong === 4901, String(wrong));
 
