@@ -19,7 +19,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
   const raws = [];
   await p.route("**/*", (r) => {
     const u = new URL(r.request().url());
-    const RPC = { "base-rpc.publicnode.com": 8453, "polygon-bor-rpc.publicnode.com": 137, "rpc.mainnet.lukso.network": 42 };
+    const RPC = { "base-rpc.publicnode.com": 8453, "polygon-bor-rpc.publicnode.com": 137, "rpc.mainnet.lukso.network": 42, "rpc.testnet.lukso.network": 4201, "my-rpc.test": 4201 };
     if (RPC[u.host]) {
       const q = JSON.parse(r.request().postData() || "{}");
       const one = (x) => {
@@ -176,6 +176,25 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
     return { a, sw, b, got };
   });
   ck("the phone key follows the network chosen in the page: chain id, chainChanged; another network is not switched to from outside (4902)", net.a === "0x2105" && net.sw === 4902 && net.b === "0x89" && net.got.includes("0x89"), JSON.stringify(net));
+  // LUKSO Testnet in the page's list, and a custom RPC: the chain id the RPC reports, not 1
+  const nets2 = await p.evaluate(async () => {
+    const got = []; signerProvider.on("chainChanged", (c) => got.push(c));
+    const el = document.getElementById("network");
+    const listed = [...el.options].some((o) => o.value === "lukso-testnet");
+    el.value = "lukso-testnet"; el.dispatchEvent(new Event("change"));
+    const t = await signerProvider.request({ method: "eth_chainId" });
+    el.value = "custom"; el.dispatchEvent(new Event("change"));
+    const empty = await signerProvider.request({ method: "eth_chainId" });
+    const r = document.getElementById("customRpc"); r.value = "https://my-rpc.test/"; r.dispatchEvent(new Event("input")); r.dispatchEvent(new Event("change"));
+    const c = await signerProvider.request({ method: "eth_chainId" });
+    await new Promise((ok) => setTimeout(ok, 100));
+    const s = await new ethers.BrowserProvider(signerProvider).getSigner();
+    await signerProvider.request({ method: "eth_sendTransaction", params: [{ from: s.address, to: "0x" + "77".repeat(20), value: "0x1", gas: "0x5208" }] });
+    return { listed, t, empty, c, got };
+  });
+  const tc = ethers.Transaction.from(raws.at(-1));
+  ck("LUKSO Testnet is in the page's list: chain id 4201", nets2.listed && nets2.t === "0x1069", JSON.stringify(nets2));
+  ck("a custom RPC: the phone key answers the chain id the RPC reports (4201), tells the page (chainChanged), and signs transactions for it", nets2.c === "0x1069" && nets2.got.includes("0x1069") && tc.chainId === 4201n && tc.from === sig.addr, JSON.stringify({ ...nets2, chainId: String(tc.chainId) }));
 
   // delete
   p.on("dialog", (d) => d.accept());

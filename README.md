@@ -207,6 +207,8 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     messages itself and signs gas-relay operations from the operation (`upwallet_signUserOperation`);
     the fingerprint prompt says what is signed; only read methods reach the network's RPC; the page's
     fixes (wording of the phone key's permissions, the gas relay box when the key is not a controller);
+  - **0.9.4** (patch): LUKSO Testnet (4201) among the page's networks; with a custom RPC the phone key
+    reports the chain id the RPC gives (it answered 1, so the page's check failed);
   - **0.9.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google

@@ -84,16 +84,36 @@ function allNets() {
   if (typeof NETWORKS !== "undefined") return NETWORKS;
   return [...(typeof LUKSO_CHAIN !== "undefined" ? [LUKSO_CHAIN] : []), ...(typeof CHAINS !== "undefined" ? CHAINS : [])];
 }
-// The network chosen in the page: the phone key is always on it.
-function currentNet() {
+// The network chosen in the page, from its list: the phone key is always on it.
+function knownNet() {
   const el = $("network");
   const c = el ? allNets().find((x) => x.key === el.value) : null;
   return c && c.chainId ? c : null;
 }
+// A custom RPC chosen in the page: its chain id is the one the RPC reports (asked once per RPC address).
+const customIds = new Map();
+async function customNet() {
+  const el = $("network"), r = $("customRpc");
+  const rpc = el && el.value === "custom" && r ? r.value.trim() : "";
+  if (!/^https?:\/\/\S+$/.test(rpc)) return null;
+  if (!customIds.has(rpc)) {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000);
+    try {
+      const res = await fetch(rpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }), signal: ctl.signal });
+      const j = await res.json();
+      const id = Number(BigInt(j.result));
+      if (!(id > 0)) return null;
+      customIds.set(rpc, id);
+    } catch (e) { return null; } finally { clearTimeout(timer); }
+  }
+  return { key: "custom", name: en() ? "custom RPC" : "RPC personalizzato", chainId: customIds.get(rpc), rpc, currency: "" };
+}
+async function currentNet() { return knownNet() || customNet(); }
 const rpcs = new Map();
 function rpcFor(net) {
-  if (!rpcs.has(net.chainId)) rpcs.set(net.chainId, new ethers.JsonRpcProvider(net.rpc, net.chainId, { staticNetwork: true, batchMaxCount: 1 }));
-  return rpcs.get(net.chainId);
+  const k = `${net.chainId}|${net.rpc}`;
+  if (!rpcs.has(k)) rpcs.set(k, new ethers.JsonRpcProvider(net.rpc, net.chainId, { staticNetwork: true, batchMaxCount: 1 }));
+  return rpcs.get(k);
 }
 
 // ---- errors as EIP-1193 expects them
@@ -197,7 +217,7 @@ function opSummary(op, net) {
 }
 async function signUserOperation(params) {
   const { op: raw, entryPoint, chainId } = (params || [])[0] || {};
-  const net = currentNet();
+  const net = await currentNet();
   if (!net) throw rpcError(4100, T.noSite());
   if (!raw || typeof raw !== "object") throw rpcError(-32602, T.badOp("no operation"));
   if (!entryPoint || !ethers.isAddress(entryPoint) || ethers.getAddress(entryPoint) !== ENTRY_POINT) throw rpcError(-32602, T.badOp("not EntryPoint v0.6"));
@@ -230,7 +250,7 @@ async function signTyped(params) {
 const big = (v) => (v === undefined || v === null || v === "" ? null : BigInt(v));
 async function sendTransaction(params) {
   const tx = (params || [])[0] || {};
-  const net = currentNet();
+  const net = await currentNet();
   if (!net) throw rpcError(4100, T.noSite());
   if (tx.from && !sameAddr(tx.from)) throw rpcError(4100, "not the phone key's account");
   if (tx.chainId != null && Number(big(tx.chainId)) !== net.chainId) throw rpcError(4901, `the transaction is for chain ${Number(big(tx.chainId))}, the page is on ${net.chainId}`);
@@ -268,12 +288,12 @@ const provider = {
     switch (m) {
       case "eth_requestAccounts": return [await ensureKey()];
       case "eth_accounts": await status(); return address ? [address] : [];
-      case "eth_chainId": { const n = currentNet(); return n ? "0x" + n.chainId.toString(16) : "0x1"; }
-      case "net_version": { const n = currentNet(); return String(n ? n.chainId : 1); }
+      case "eth_chainId": { const n = await currentNet(); return n ? "0x" + n.chainId.toString(16) : "0x1"; }
+      case "net_version": { const n = await currentNet(); return String(n ? n.chainId : 1); }
       // The phone key follows the network chosen in the page: a network the page knows is "switched to".
       case "wallet_switchEthereumChain": {
         const id = Number(BigInt(p && p[0] && p[0].chainId));
-        const n = currentNet();
+        const n = await currentNet();
         if (n && n.chainId === id) return null;
         throw rpcError(4902, "choose this network in the page");
       }
@@ -286,7 +306,7 @@ const provider = {
       default: {
         // Only reads go to the network's RPC (AUDIT 2026-10-26, Info): anything else is not a wallet method.
         if (!READS.has(m)) throw rpcError(4200, `${m} is not supported`);
-        const n = currentNet();
+        const n = await currentNet();
         if (!n) throw rpcError(4100, T.noSite());
         return rpcFor(n).send(m, p || []);
       }
@@ -332,7 +352,7 @@ function backupLink() {
   if (address) q.set("phone", address);
   const up = $("upAddress") && $("upAddress").value.trim();
   if (up && ethers.isAddress(up)) q.set("up", ethers.getAddress(up));
-  const n = currentNet();
+  const n = knownNet();
   if (n) q.set("network", n.key);
   return `${SITE}up-backup.html?${q}`;
 }
@@ -391,7 +411,10 @@ document.addEventListener("DOMContentLoaded", () => {
   new MutationObserver(() => renderPanel()).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
   // A network chosen in the page is the phone key's network: the page re-runs its check.
   const el = $("network");
-  if (el) el.addEventListener("change", () => { const n = currentNet(); if (n) emit("chainChanged", "0x" + n.chainId.toString(16)); });
+  const changed = async () => { const n = await currentNet(); if (n) emit("chainChanged", "0x" + n.chainId.toString(16)); };
+  if (el) el.addEventListener("change", changed);
+  const rpcEl = $("customRpc");
+  if (rpcEl) rpcEl.addEventListener("change", changed);
   if (!isAcked()) showWarning();
 });
 
