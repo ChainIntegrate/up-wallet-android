@@ -268,6 +268,12 @@ with Subresource Integrity (W-tel); the page's Content-Security-Policy, with its
 by the build (N-3, see "What the app adds to the page"); signatures not made out to the UP flagged
 (SIWE, Permit, EIP-3009) and a token that answers `false` refused (I-7, L-8). Not a professional audit.
 
+**Next review.** The changes since 0.9.2 (0.9.3 to 0.9.6: the fixes above, the phone key with a custom
+RPC, the quiet keep-alive channel, the version line, "Authorize a device") are in the scope of the next
+review of the whole project, with the new browser extension
+([up-wallet-extension](https://github.com/ChainIntegrate/up-wallet-extension), the same page and the same
+kind of device key on the computer): Cross_Chain `AUDIT.md`, section 16.
+
 ## License
 
 MIT for this repository's code ([LICENSE](LICENSE)). The APK also contains third-party code under
