@@ -327,6 +327,11 @@ function watchPage() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && native()) LocalNotifications.removeAllDeliveredNotifications().catch(() => null);
   });
+  // The app's own version, for the version line at the bottom of the page (up-wallet.html, renderVersion).
+  if (native()) App.getInfo().then((info) => {
+    window.__upwalletAppVersion = info.version;
+    window.dispatchEvent(new Event("upwallet:version"));
+  }).catch(() => null);
   if (native()) LocalNotifications.createChannel({ id: "requests", name: N.channel(), importance: 5, visibility: 1, vibration: true }).catch(() => null);
 }
 

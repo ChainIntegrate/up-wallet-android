@@ -19,7 +19,10 @@ import androidx.core.app.NotificationCompat;
  * Started and stopped by the page (KeepAlivePlugin) when a WalletConnect session opens or closes.
  */
 public class KeepAliveService extends Service {
-    static final String CHANNEL = "keepalive";
+    // A channel's importance cannot change once created: the quiet channel has its own id, and the first one
+    // ("keepalive", IMPORTANCE_LOW, shown on the lock screen) is deleted.
+    static final String CHANNEL = "keepalive_quiet";
+    static final String OLD_CHANNEL = "keepalive";
     static final int ID = 4242;
     static volatile boolean running = false;
     static volatile String lastError = null;
@@ -30,7 +33,13 @@ public class KeepAliveService extends Service {
         String channelName = intent != null ? intent.getStringExtra("channel") : null;
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26 && nm != null) {
-            nm.createNotificationChannel(new NotificationChannel(CHANNEL, channelName != null ? channelName : "UP Wallet", NotificationManager.IMPORTANCE_LOW));
+            // IMPORTANCE_MIN: no sound, no status bar icon, collapsed in the shade; never on the lock screen.
+            // dApp requests have their own channel ("requests"), which still shows them.
+            NotificationChannel ch = new NotificationChannel(CHANNEL, channelName != null ? channelName : "UP Wallet", NotificationManager.IMPORTANCE_MIN);
+            ch.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
+            ch.setShowBadge(false);
+            nm.createNotificationChannel(ch);
+            if (nm.getNotificationChannel(OLD_CHANNEL) != null) nm.deleteNotificationChannel(OLD_CHANNEL);
         }
         Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
         PendingIntent tap = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -41,7 +50,9 @@ public class KeepAliveService extends Service {
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(text != null ? text : ""))
                 .setOngoing(true)
                 .setContentIntent(tap)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+                .setSilent(true)
                 .build();
         // Android can refuse (a data sync service's daily time limit exhausted; Android 12+: app not in the
         // foreground). Then the app goes on without it: no crash, the service stops. Android 14+ uses the
