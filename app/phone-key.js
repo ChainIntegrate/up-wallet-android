@@ -33,8 +33,8 @@ const T = {
   none: () => (en() ? "No phone key yet: it is created when you press \"Use the phone key\" (fingerprint or PIN)." : "Nessuna chiave del telefono: si crea quando premi \"Usa la chiave del telefono\" (impronta o PIN)."),
   addr: (a, hw) => (en() ? `Phone key: ${a}` : `Chiave del telefono: ${a}`) + (hw ? ` · ${hw === "strongbox" ? "StrongBox" : hw === "tee" ? (en() ? "secure hardware" : "hardware sicuro") : (en() ? "software only" : "solo software")}` : ""),
   authHint: () => (en()
-    ? "To use it, authorize it once on each network where the UP exists: on a computer, the site's Backup page, \"Authorize a phone\", signed by an admin controller of the UP (for example in MetaMask). A lost phone is revoked from the same page."
-    : "Per usarla, autorizzala una volta su ogni rete dove esiste la UP: dal computer, pagina Backup del sito, \"Autorizza un telefono\", firmato da un controller amministratore della UP (per esempio in MetaMask). Un telefono perso si revoca dalla stessa pagina."),
+    ? "To use it, authorize it once on each network where the UP exists: on a computer, the site's Backup page, \"Authorize a device\", signed by an admin controller of the UP (for example in MetaMask). A lost phone is revoked from the same page."
+    : "Per usarla, autorizzala una volta su ogni rete dove esiste la UP: dal computer, pagina Backup del sito, \"Autorizza un dispositivo\", firmato da un controller amministratore della UP (per esempio in MetaMask). Un telefono perso si revoca dalla stessa pagina."),
   copy: () => (en() ? "Copy address" : "Copia indirizzo"),
   copied: () => (en() ? "Copied" : "Copiato"),
   qr: () => (en() ? "Show QR" : "Mostra QR"),

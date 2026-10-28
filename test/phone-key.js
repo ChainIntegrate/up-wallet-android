@@ -79,7 +79,7 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
   const texts = await p.evaluate(() => ({ cls: document.documentElement.classList.contains("phone-key"), p3: document.querySelector('[data-i18n="panel3Title"]').textContent, ready: t("readyToSend"), perms: t("permsNone"), body: document.body.innerText }));
   const relayText = await p.evaluate(() => ({ ask: GasRelayClient.text("signAsk", { hash: "0x01" }), note: GasRelayClient.text("optionNote", { pm: "PM" }) }));
   ck("the gas relay's texts name the phone key too (no MetaMask)", /chiave del telefono firma il messaggio 0x01/.test(relayText.ask) && /impronta/.test(relayText.note) && !/MetaMask/.test(relayText.ask + relayText.note), JSON.stringify(relayText));
-  ck("the page's texts name the phone key, not MetaMask (html.phone-key)", texts.cls && texts.p3 === "3 · Controller (chiave del telefono) e verifica" && /conferma con l'impronta/.test(texts.ready) && /Autorizza un telefono/.test(texts.perms)
+  ck("the page's texts name the phone key, not MetaMask (html.phone-key)", texts.cls && texts.p3 === "3 · Controller (chiave del telefono) e verifica" && /conferma con l'impronta/.test(texts.ready) && /Autorizza un dispositivo/.test(texts.perms)
     && !/MetaMask/.test(texts.body.replace(/Nessuna affiliazione[^.]*\./, "")), JSON.stringify({ ...texts, body: (texts.body.match(/.{0,80}MetaMask.{0,80}/g) || []).join(" | ") }));
   await p.selectOption("#network", "base");
   await p.fill("#upAddress", UP);

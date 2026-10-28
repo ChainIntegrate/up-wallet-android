@@ -50,7 +50,7 @@ How it works:
   sees the key. There is no seed phrase and no copy: app data is not backed up (`allowBackup="false"`),
   and uninstalling the app or losing the phone loses the key. That is handled by revoking it.
 - **Authorized once per network, from the site.** The app shows the key's address (copy, QR). On a
-  computer, the site's **Backup** page, "Authorize a phone", adds it as a controller of the UP on that
+  computer, the site's **Backup** page, "Authorize a device", adds it as a controller of the UP on that
   network, signed by an admin controller of the UP (for example in MetaMask on the computer), with
   **no admin permissions, but access to all the UP's funds** (whoever unlocks the phone and passes the
   fingerprint or PIN can move them):
@@ -212,6 +212,8 @@ every published build, whatever the name. The release tag is `v<versionName>`.
   - **0.9.5** (patch): the page batch of 2026-10-28 (UP CIE Link statements explained and checked, the
     "Every network" view on a testnet, a version line at the bottom: the app's version and the page's
     commit); the "stays active" notification is silent and kept off the lock screen (a new quiet channel);
+  - **0.9.6** (patch): page 0.10.0 (the page's numbered version, LUKSO as the starting network, the UP by
+    name in panel 2); the site's Backup page now says "Authorize a device" (phone or computer);
   - **0.9.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
