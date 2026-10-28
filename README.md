@@ -64,6 +64,11 @@ How it works:
 
   Never adding controllers, editing permissions or extensions: those stay with the admin keys (the
   genesis key, the backup). The same page revokes a lost phone's key, network by network.
+- **One key per device, by choice.** No export, import, backup or sync of the key, not even encrypted: a
+  new phone (or computer, with the browser extension) gets its own key and one "Authorize a device". Each
+  device is a controller of its own, revoked alone if lost; a key that never leaves its device cannot be
+  taken from a file or an account; and since device keys have no admin permissions, adding one always takes
+  an admin controller (MetaMask), once, by design.
 - **The page is the same as the site's**: the request window, its checks and simulation, the gas relay,
   sending from the UP, notifications, "Back to the dApp". Its texts name the phone key and the
   fingerprint instead of MetaMask (`html.phone-key`, set by `app/phone-key.js`).
