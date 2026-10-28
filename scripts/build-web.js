@@ -92,6 +92,11 @@ async function main() {
   const cfg = '<script src="config.js"></script>';
   if (!html.includes(cfg)) throw new Error("config.js script tag not found in the page");
   html = html.replace(cfg, `${cfg}\n<script src="app/phone-key.js"></script>\n<script src="app/native.js"></script>`);
+  // The version line at the bottom of the page: the app names the page's Cross_Chain commit.
+  const COMMIT_LINE = "const PAGE_COMMIT = null;";
+  if (!html.includes(COMMIT_LINE)) throw new Error("PAGE_COMMIT not found in the page");
+  html = html.replace(COMMIT_LINE, `const PAGE_COMMIT = ${JSON.stringify(upstream.commit.slice(0, 7))};`);
+
   // WalletConnect metadata: the page names its own origin, which in the app is https://upwallet.chainintegrate.it.
   // dApps are shown the site instead (its address and icon).
   const META = "      url: location.origin,\n      icons: [location.origin + \"/favicon.ico\"],";
