@@ -113,9 +113,12 @@ on the site.
   is signed (the EIP-191 digest of a message, the EIP-712 digest of typed data, a transaction's hash) and
   asks the native `PhoneKey` plugin (`PhoneKeyPlugin.java`, `Secp256k1.java`) for the signature, which
   asks for the fingerprint or PIN each time; signed transactions go to the network's RPC. It follows the
-  network chosen in the page. It also shows the first-start warning and, under panel 3's button, "This
-  phone": the key's address (copy, QR), the link to the site's Backup page with phone, UP and network
-  filled in, and "Delete the phone key".
+  network chosen in the page; the fingerprint prompt says what is signed (for a transaction to the UP's
+  Key Manager, what the UP does inside `execute(bytes)`). It also shows the first-start warning and, under
+  panel 3's button, "This phone": the key's address (copy, QR), its name kept on the UP, the link to the
+  site's Backup page with phone, UP, network and "Phone · UP Wallet app" filled in, the key's own balance
+  with "Send the key's balance to the UP", and "Delete the phone key". At every opening the key connects
+  by itself (no fingerprint), with the last UP used (section "The phone key").
 - `app/native.js` (bundled): a Paste button for the WalletConnect link; a `wc:` link opened with the
   app or text shared to it (Share -> UP Wallet) is put in the link field (the native side is
   `IncomingLinkPlugin.java`); connecting still takes a tap on the page's button. The UP address and
