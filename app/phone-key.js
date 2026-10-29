@@ -40,9 +40,17 @@ const T = {
   qr: () => (en() ? "Show QR" : "Mostra QR"),
   open: () => (en() ? "Open the Backup page" : "Apri la pagina Backup"),
   remove: () => (en() ? "Delete the phone key" : "Elimina la chiave del telefono"),
+  named: (name, net) => (en() ? `Name on the UP (${net}): ${name}` : `Nome sulla UP (${net}): ${name}`),
+  unnamed: (net) => (en() ? `No name on the UP on ${net}: it can be given from the Backup page.` : `Nessun nome sulla UP su ${net}: si può dare dalla pagina Backup.`),
+  bal: (v, net) => (en() ? `The key's own balance on ${net}: ${v}` : `Saldo della chiave su ${net}: ${v}`),
+  sweep: () => (en() ? "Send the key's balance to the UP" : "Manda il saldo della chiave alla UP"),
+  sweepNoUp: () => (en() ? "Choose the UP in the page first." : "Prima scegli la UP nella pagina."),
+  sweepLow: () => (en() ? "The balance does not cover the transfer's fee." : "Il saldo non copre la commissione del trasferimento."),
+  sweepSent: (h) => (en() ? `Sent to the UP: ${h}` : `Inviato alla UP: ${h}`),
+  txKm: (what) => (en() ? `Through the UP's Key Manager: ${what}` : `Tramite il Key Manager della UP: ${what}`),
   removeAsk: () => (en()
-    ? "Delete the phone key from this phone? It cannot be recovered. First revoke it on every network (site, Backup page), or it stays a controller of the UP that nobody can use."
-    : "Eliminare la chiave del telefono? Non si può recuperare. Prima revocala su ogni rete (sito, pagina Backup), altrimenti resta un controller della UP che nessuno può usare."),
+    ? "Delete the phone key from this phone? It cannot be recovered. First send its balance to the UP (\"This phone\", on every network where it has some) and revoke it on every network (site, Backup page), or it stays a controller of the UP that nobody can use."
+    : "Eliminare la chiave del telefono? Non si può recuperare. Prima manda alla UP il suo saldo (\"Questo telefono\", su ogni rete dove ne ha) e revocala su ogni rete (sito, pagina Backup), altrimenti resta un controller della UP che nessuno può usare."),
   noAuth: () => (en() ? "Set up a fingerprint or a screen lock on the phone first." : "Prima imposta un'impronta o un blocco schermo sul telefono."),
   invalidated: () => (en()
     ? "The phone key can no longer be unlocked (the screen lock was changed or removed). Delete it, create a new one, and revoke the old address from the site's Backup page."
@@ -203,18 +211,22 @@ function userOpHash(op, chainId) {
       op.verificationGasLimit, op.preVerificationGas, op.maxFeePerGas, op.maxPriorityFeePerGas, ethers.keccak256(op.paymasterAndData)]);
   return ethers.keccak256(enc(["bytes32", "address", "uint256"], [ethers.keccak256(packed), ENTRY_POINT, chainId]));
 }
-function opSummary(op, net) {
+// What the UP does, from its execute / executeBatch call data (a gas-relay operation, or the payload of the
+// Key Manager's execute(bytes)), for the fingerprint prompt.
+function upWhat(callData, net) {
   let what;
   try {
-    const d = UP_IFACE.parseTransaction({ data: op.callData });
+    const d = UP_IFACE.parseTransaction({ data: callData });
     if (d.name === "execute") {
       const [, to, value, data] = d.args;
       const v = value > 0n ? `${ethers.formatEther(value)} ${net.currency || ""}`.trim() : "";
       what = T.opCall(short(to), v, ethers.dataLength(data) >= 4 ? ethers.dataSlice(data, 0, 4) : "");
     } else what = T.opBatch(d.args[1].length);
-  } catch (e) { what = T.opOther(ethers.dataLength(op.callData) >= 4 ? ethers.dataSlice(op.callData, 0, 4) : "0x"); }
-  return T.opWhat(short(op.sender), what);
+  } catch (e) { what = T.opOther(ethers.dataLength(callData) >= 4 ? ethers.dataSlice(callData, 0, 4) : "0x"); }
+  return what;
 }
+function opSummary(op, net) { return T.opWhat(short(op.sender), upWhat(op.callData, net)); }
+const KM_IFACE = new ethers.Interface(["function execute(bytes)"]);
 async function signUserOperation(params) {
   const { op: raw, entryPoint, chainId } = (params || [])[0] || {};
   const net = await currentNet();
@@ -267,8 +279,14 @@ async function sendTransaction(params) {
   }
   const t = ethers.Transaction.from({ ...base, nonce, gasLimit, chainId: net.chainId, ...fees });
   const value = base.value > 0n ? `${ethers.formatEther(base.value)} ${net.currency || ""}`.trim() : "";
-  const sig = await signDigest(t.unsignedHash, T.signTx(net.name, base.to ? short(base.to) : "—", value),
-    T.txData(ethers.dataLength(base.data) ? ethers.dataSlice(base.data, 0, Math.min(4, ethers.dataLength(base.data))) : ""));
+  // A transaction to the UP's Key Manager: the prompt says what the UP does (execute(bytes): its execute or
+  // executeBatch inside), not only the Key Manager's function.
+  let detail = T.txData(ethers.dataLength(base.data) ? ethers.dataSlice(base.data, 0, Math.min(4, ethers.dataLength(base.data))) : "");
+  try {
+    const [payload] = KM_IFACE.decodeFunctionData("execute", base.data);
+    detail = T.txKm(upWhat(payload, net));
+  } catch (e) { /* not the Key Manager's execute(bytes) */ }
+  const sig = await signDigest(t.unsignedHash, T.signTx(net.name, base.to ? short(base.to) : "—", value), detail);
   t.signature = ethers.Signature.from(sig);
   if (ethers.getAddress(t.from) !== address) throw rpcError(-32603, "signature check failed");
   return rpc.send("eth_sendRawTransaction", [t.serialized]);
@@ -347,9 +365,47 @@ function showWarning() {
 }
 
 // ---- "This phone", under the page's connect button
+// The key's name on the UP, on the page's network (kept on the UP by the Backup page, backup-check.js), and the
+// key's own balance there (what it pays gas with when it sends a transaction itself), with the transfer of it
+// to the page's UP: the recipient is always that UP, the amount the balance minus the transfer's maximum fee;
+// the fingerprint prompt shows both, as for every transaction. A failed read is not tried again until the
+// network, the UP or the key changes (renderPanel would loop).
+let keyName = { k: "", name: null }, keyBal = { k: "", wei: null }, loading = {}, sweepNote = "";
+function upOf() { const el = $("upAddress"); return el && ethers.isAddress(el.value.trim()) ? ethers.getAddress(el.value.trim()) : null; }
+async function refreshName(n, up, k) {
+  if (loading.name === k) return;
+  loading.name = k;
+  try { const names = await window.BackupCheck.readNames(rpcFor(n), up, [address]); keyName = { k, name: names[address.toLowerCase()] || null }; }
+  catch (e) { keyName = { k, name: null, err: true }; } finally { loading.name = ""; }
+  renderPanel();
+}
+async function refreshBal(n, k) {
+  if (loading.bal === k) return;
+  loading.bal = k;
+  try { keyBal = { k, wei: await rpcFor(n).getBalance(address) }; } catch (e) { keyBal = { k, wei: null }; } finally { loading.bal = ""; }
+  renderPanel();
+}
+async function sweep() {
+  const n = knownNet(), up = upOf();
+  if (!n || !up) { sweepNote = T.sweepNoUp(); renderPanel(); return; }
+  const rpc = rpcFor(n);
+  const [bal, f, gas] = await Promise.all([rpc.getBalance(address), rpc.getFeeData(), rpc.estimateGas({ from: address, to: up, value: 1n })]);
+  const gasLimit = (gas * 12n) / 10n;   // the UP's receive() does a little more than a plain transfer
+  const fees = f.maxFeePerGas != null
+    ? { maxFeePerGas: (f.maxFeePerGas * 12n) / 10n, maxPriorityFeePerGas: f.maxPriorityFeePerGas ?? 0n }
+    : { gasPrice: (f.gasPrice * 12n) / 10n };
+  const value = bal - gasLimit * (fees.maxFeePerGas ?? fees.gasPrice);
+  if (value <= 0n) { sweepNote = T.sweepLow(); renderPanel(); return; }
+  const hex = (v) => "0x" + v.toString(16);
+  const tx = { from: address, to: up, value: hex(value), gas: hex(gasLimit), chainId: hex(BigInt(n.chainId)) };
+  if (fees.maxFeePerGas != null) { tx.maxFeePerGas = hex(fees.maxFeePerGas); tx.maxPriorityFeePerGas = hex(fees.maxPriorityFeePerGas); } else tx.gasPrice = hex(fees.gasPrice);
+  try { sweepNote = T.sweepSent(await sendTransaction([tx])); } catch (e) { sweepNote = e.message || String(e); }
+  keyBal = { k: "", wei: null };
+  renderPanel();
+}
 function backupLink() {
   const q = new URLSearchParams();
-  if (address) q.set("phone", address);
+  if (address) { q.set("phone", address); q.set("device", "phone"); }
   const up = $("upAddress") && $("upAddress").value.trim();
   if (up && ethers.isAddress(up)) q.set("up", ethers.getAddress(up));
   const n = knownNet();
@@ -371,6 +427,17 @@ function renderPanel() {
   add("b", T.title());
   if (!address) { add("div", T.none()); return; }
   add("div", T.addr(address, lastStatus && lastStatus.hardware)).style.cssText = "font-family:monospace;overflow-wrap:anywhere;margin:4px 0;";
+  const n = knownNet(), up = upOf();
+  if (n && up && window.BackupCheck) {
+    const k = `${n.chainId}:${up}:${address}`;
+    if (keyName.k !== k) refreshName(n, up, k);
+    else if (!keyName.err) add("div", keyName.name ? T.named(keyName.name, n.name) : T.unnamed(n.name)).style.cssText = keyName.name ? "font-weight:600;overflow-wrap:anywhere;margin:4px 0;" : "margin:4px 0;";
+  }
+  const bk = n ? `${n.chainId}:${address}` : "";
+  const bal = bk && keyBal.k === bk ? keyBal.wei : null;
+  if (bk && keyBal.k !== bk) refreshBal(n, bk);
+  else if (bal !== null) add("div", T.bal(`${ethers.formatEther(bal)} ${n.currency || ""}`.trim(), n.name)).style.cssText = "margin:4px 0;";
+  if (sweepNote) add("div", sweepNote).style.cssText = "margin:4px 0;overflow-wrap:anywhere;";
   add("div", T.authHint());
   const row = add("div"); row.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;";
   const btn = (text, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "secondary small"; b.textContent = text; b.addEventListener("click", fn); row.appendChild(b); return b; };
@@ -392,6 +459,9 @@ function renderPanel() {
   link.className = "secondary small"; link.style.alignSelf = "center";
   link.addEventListener("click", () => { link.href = backupLink(); });
   row.appendChild(link);
+  if (bal !== null && bal > 0n) {
+    const b = btn(T.sweep(), async () => { b.disabled = true; sweepNote = ""; try { await sweep(); } catch (e) { sweepNote = e.message || String(e); renderPanel(); } });
+  }
   btn(T.remove(), async () => {
     if (!window.confirm(T.removeAsk())) return;
     diag("PhoneKey: remove");
@@ -406,8 +476,12 @@ async function refresh() {
   renderPanel();
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  refresh();
+document.addEventListener("DOMContentLoaded", async () => {
+  await refresh();
+  // At every opening the phone key comes back by itself, with the last UP and the network: connecting it only
+  // reads its address (no fingerprint). Not before the warning is accepted.
+  /* global signerAddress */
+  if (address && isAcked() && !(typeof signerAddress !== "undefined" && signerAddress)) { const b = $("connectSigner"); if (b) b.click(); }
   new MutationObserver(() => renderPanel()).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
   // A network chosen in the page is the phone key's network: the page re-runs its check.
   const el = $("network");
@@ -415,6 +489,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (el) el.addEventListener("change", changed);
   const rpcEl = $("customRpc");
   if (rpcEl) rpcEl.addEventListener("change", changed);
+  // The name and the balance follow the network and the UP, and are read again when the app comes back to
+  // the front (after the Backup page, or a transfer).
+  let later = null;
+  const again = (changedSetup) => { clearTimeout(later); later = setTimeout(() => { keyName = { k: "", name: null }; keyBal = { k: "", wei: null }; if (changedSetup) sweepNote = ""; renderPanel(); }, 600); };
+  if (el) el.addEventListener("change", () => again(true));
+  const upEl = $("upAddress");
+  if (upEl) upEl.addEventListener("input", () => again(true));
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") again(false); });
   if (!isAcked()) showWarning();
 });
 

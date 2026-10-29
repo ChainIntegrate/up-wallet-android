@@ -11,6 +11,7 @@ const ROOT = path.join(__dirname, ".."), WWW = path.join(ROOT, "www");
 const TYPES = { ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".ico": "image/x-icon", ".html": "text/html" };
 const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${n}${c ? "" : "\n      " + String(x).slice(0, 1200)}`);
 const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat(20);
+const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns (bytes[])"]);
 
 (async () => {
   const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
@@ -33,6 +34,17 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
           case "eth_getBlockByNumber": return ok({ number: "0x10", hash: "0x" + "ab".repeat(32), parentHash: "0x" + "cd".repeat(32), timestamp: "0x6700", nonce: "0x0000000000000000", difficulty: "0x0", gasLimit: "0x1c9c380", gasUsed: "0x0", miner: "0x" + "00".repeat(20), extraData: "0x", baseFeePerGas: "0x3b9aca00", transactions: [] });
           case "eth_sendRawTransaction": raws.push(x.params[0]); return ok(ethers.keccak256(x.params[0]));
           case "eth_getCode": return ok("0x");
+          // 0.01 ETH on the phone key's address on Base (not on the test's recipient)
+          case "eth_getBalance": return ok(u.host === "base-rpc.publicnode.com" && String(x.params[0]).toLowerCase() !== TO ? "0x2386f26fc10000" : "0x");
+          case "eth_call": {
+            // The UP's controller names (Backup page): every key is "Pixel di prova" on Base.
+            const c = x.params[0];
+            if (u.host === "base-rpc.publicnode.com" && c.to && c.to.toLowerCase() === UP.toLowerCase() && c.data.startsWith(GDB.getFunction("getDataBatch").selector)) {
+              const keys = GDB.decodeFunctionData("getDataBatch", c.data)[0];
+              return ok(GDB.encodeFunctionResult("getDataBatch", [keys.map((k) => (k.toLowerCase().startsWith("0x344e172b69e28979f8df0000") ? ethers.hexlify(ethers.toUtf8Bytes("Pixel di prova")) : "0x"))]));
+            }
+            return ok("0x");
+          }
           default: return ok("0x");
         }
       };
@@ -47,16 +59,19 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
     try { localStorage.setItem("upwallet.riskAccepted", "1"); localStorage.setItem("upwallet.view", "all"); localStorage.setItem("upwallet.lang", "it"); } catch (e) { /* none */ }
     // The PhoneKey plugin, mocked: an ethers wallet in place of the Keystore; each prompt is recorded.
     window.__pk = { wallet: null, prompts: [], cancel: false };
+    // As the Keystore, the key outlives a reload (taken back at the first call, once ethers is loaded).
+    const restore = () => { try { const k = localStorage.getItem("__pkTest"); if (k && !window.__pk.wallet) window.__pk.wallet = new ethers.Wallet(k); } catch (e) { /* none */ } };
     window.__upwalletPhoneKey = {
-      async status() { const w = window.__pk.wallet; return { exists: !!w, address: w ? w.address.toLowerCase() : null, hardware: w ? "tee" : null, canAuth: true }; },
-      async create(o) { window.__pk.prompts.push(["create", o.subtitle]); if (window.__pk.cancel) throw Object.assign(new Error("canceled"), { code: "CANCELED" }); window.__pk.wallet = ethers.Wallet.createRandom(); return { address: window.__pk.wallet.address.toLowerCase() }; },
+      async status() { restore(); const w = window.__pk.wallet; return { exists: !!w, address: w ? w.address.toLowerCase() : null, hardware: w ? "tee" : null, canAuth: true }; },
+      async create(o) { window.__pk.prompts.push(["create", o.subtitle]); if (window.__pk.cancel) throw Object.assign(new Error("canceled"), { code: "CANCELED" }); window.__pk.wallet = ethers.Wallet.createRandom(); localStorage.setItem("__pkTest", window.__pk.wallet.privateKey); return { address: window.__pk.wallet.address.toLowerCase() }; },
       async sign(o) {
+        restore();
         window.__pk.prompts.push(["sign", o.subtitle, o.digest, o.description]);
         if (window.__pk.cancel) throw Object.assign(new Error("canceled"), { code: "CANCELED" });
         if (!window.__pk.wallet) throw Object.assign(new Error("no key"), { code: "NO_KEY" });
         return { signature: window.__pk.wallet.signingKey.sign(o.digest).serialized };
       },
-      async remove() { window.__pk.wallet = null; },
+      async remove() { window.__pk.wallet = null; localStorage.removeItem("__pkTest"); },
     };
   });
   await p.goto("https://localhost/up-wallet.html");
@@ -118,6 +133,25 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
   ck("the prompt names the network, the recipient and the value", /Transazione su Base verso 0x7777…7777, 0\.01 ETH/.test(tx.prompt), tx.prompt);
   const txDesc = await p.evaluate(() => window.__pk.prompts.at(-1)[3]);
   ck("PK-4: and the function it calls", txDesc === "Chiama la funzione 0x1234", txDesc);
+  // a transaction to the UP's Key Manager: the prompt says what the UP does inside execute(bytes)
+  const kmDesc = await p.evaluate(async (TO) => {
+    const up = new ethers.Interface(["function execute(uint256,address,uint256,bytes)"]).encodeFunctionData("execute", [0, TO, 10n ** 16n, "0x12345678"]);
+    const data = new ethers.Interface(["function execute(bytes)"]).encodeFunctionData("execute", [up]);
+    await signerProvider.request({ method: "eth_sendTransaction", params: [{ from: signerAddress, to: "0x" + "4b".repeat(20), data, chainId: "0x2105", gas: "0x9c40" }] });
+    return window.__pk.prompts.at(-1)[3];
+  }, TO);
+  ck("a transaction through the Key Manager (execute(bytes)): the prompt says what the UP does (recipient, value, function)", kmDesc === "Tramite il Key Manager della UP: verso 0x7777…7777, 0.01 ETH, funzione 0x12345678", kmDesc);
+  // the key's name and own balance on the page's network; the balance sent to the UP
+  await p.waitForFunction(() => /Nome sulla UP \(Base\): Pixel di prova/.test(document.getElementById("pkPanel").innerText) && /Saldo della chiave su Base: 0\.01 ETH/.test(document.getElementById("pkPanel").innerText), null, { timeout: 8000 }).catch(() => null);
+  const panel2 = await p.evaluate(() => ({ text: document.getElementById("pkPanel").innerText, link: [...document.querySelectorAll("#pkPanel a")].map((a) => a.href)[0] }));
+  ck("the panel shows the key's name kept on the UP and its own balance on the page's network; the Backup link names the kind of device", /Nome sulla UP \(Base\): Pixel di prova/.test(panel2.text) && /Saldo della chiave su Base: 0\.01 ETH/.test(panel2.text) && /Manda il saldo della chiave alla UP/.test(panel2.text) && new URL(panel2.link).searchParams.get("device") === "phone", JSON.stringify(panel2));
+  const nRaw = raws.length;
+  await p.evaluate(() => [...document.querySelectorAll("#pkPanel button")].find((x) => /Manda il saldo/.test(x.textContent)).click());
+  await p.waitForFunction(() => /Inviato alla UP: 0x[0-9a-f]{64}/.test(document.getElementById("pkPanel").innerText), null, { timeout: 8000 }).catch(() => null);
+  const swept = raws.length > nRaw ? ethers.Transaction.from(raws.at(-1)) : null;
+  const swPrompt = await p.evaluate(() => window.__pk.prompts.at(-1)[1]);
+  const fee = swept ? (swept.maxFeePerGas ?? swept.gasPrice) : 0n;
+  ck("sending the balance: a plain transfer to the page's UP, the balance minus the maximum fee, after the fingerprint prompt naming the UP", swept && swept.to === UP && swept.value > 0n && swept.value + swept.gasLimit * fee === 10n ** 16n && /Transazione su Base verso 0x4a26…8c27/.test(swPrompt), swept ? JSON.stringify({ to: swept.to, value: String(swept.value), prompt: swPrompt }) : "no transaction");
 
   // PK-2: an ERC-4337 operation of the UP, through the gas relay client: the key computes the hash itself
   const EP = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
@@ -196,6 +230,18 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
   ck("LUKSO Testnet is in the page's list: chain id 4201", nets2.listed && nets2.t === "0x1069", JSON.stringify(nets2));
   ck("a custom RPC: the phone key answers the chain id the RPC reports (4201), tells the page (chainChanged), and signs transactions for it", nets2.c === "0x1069" && nets2.got.includes("0x1069") && tc.chainId === 4201n && tc.from === sig.addr, JSON.stringify({ ...nets2, chainId: String(tc.chainId) }));
 
+  // at every opening: the last UP, the phone key (no fingerprint) and "Only simulation" come back
+  await p.evaluate(() => {
+    const el = document.getElementById("network"); el.value = "base"; el.dispatchEvent(new Event("change"));
+    try { localStorage.setItem("upwallet.network", "base"); } catch (e) { /* none */ }
+    const c = document.getElementById("simulateOnly"); c.checked = false; c.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const nPrompts = await p.evaluate(() => window.__pk.prompts.length);
+  await p.reload();
+  await p.waitForFunction(() => typeof signerAddress !== "undefined" && signerAddress, null, { timeout: 8000 }).catch(() => null);
+  const back = await p.evaluate(() => ({ up: document.getElementById("upAddress").value, signer: typeof signerAddress !== "undefined" ? signerAddress : null, key: window.__pk.wallet && window.__pk.wallet.address, prompts: window.__pk.prompts.length, sim: document.getElementById("simulateOnly").checked }));
+  ck("at every opening: the last UP, the phone key (without a fingerprint prompt) and the \"Only simulation\" choice come back", back.up === UP && back.signer && back.key && back.signer.toLowerCase() === back.key.toLowerCase() && back.prompts === 0 && back.sim === false, JSON.stringify({ ...back, before: nPrompts }));
+
   // delete
   p.on("dialog", (d) => d.accept());
   await p.evaluate(() => { [...document.querySelectorAll("#pkPanel button")].find((x) => /Elimina/.test(x.textContent)).click(); });
@@ -208,4 +254,4 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat
   const fails = res.filter((x) => x.startsWith("FAIL")).length;
   console.log(fails ? `${fails} FAILED` : `${res.length}/${res.length}`);
   process.exit(fails ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => { console.log(res.join("\n")); console.error(e); process.exit(1); });

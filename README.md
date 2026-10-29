@@ -64,6 +64,17 @@ How it works:
 
   Never adding controllers, editing permissions or extensions: those stay with the admin keys (the
   genesis key, the backup). The same page revokes a lost phone's key, network by network.
+- **The panel "This phone"** (`app/phone-key.js`): the key's address (copy, QR), its name kept on the UP on
+  the page's network (given on the Backup page), the link to the Backup page (it fills in the key, the UP,
+  the network and "Phone · UP Wallet app" as the name to start from), the key's own balance on that network
+  (what it pays gas with when it sends a transaction itself) with "Send the key's balance to the UP" (one
+  plain transfer to the page's UP, the balance minus the maximum fee, after the fingerprint: a lost key
+  has no copy, and neither has its balance), delete. At every opening the key connects by itself (it only
+  reads its address, no fingerprint), with the last UP used and the network.
+- **The fingerprint prompt says what is signed**, from the signed data: the message's text, the typed
+  data's domain, the transaction's network, recipient, value and function, and for a transaction to the
+  UP's Key Manager (`execute(bytes)`) what the UP does inside (each call's recipient, value and function),
+  as for a gas-relay operation.
 - **One key per device, by choice.** No export, import, backup or sync of the key, not even encrypted: a
   new phone (or computer, with the browser extension) gets its own key and one "Authorize a device". Each
   device is a controller of its own, revoked alone if lost; a key that never leaves its device cannot be
