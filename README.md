@@ -327,6 +327,9 @@ Improvements (changes to the page itself are collected in Cross_Chain's
 - A dApp on a chain other than the one chosen in the page (OpenSea's cross-chain checkout) is refused
   by design: one UP, one network per session. Since 0.8.1 a switch request is refused with 4001 and the
   dApp is told the session's network, and the log says which network to choose in the dApp.
+- Later: the phone key signing inside the Keystore itself (P-256: the Keystore cannot use Ethereum's
+  curve, so today the key is decrypted in the app for each signature). It needs a contract on the UP that
+  checks such signatures and a professional audit: Cross_Chain's roadmap, step 8.
 - iPhone: not started (needs an Apple developer account and a review; WalletConnect works there too,
   the native parts differ: the Secure Enclave would keep the phone key).
 - Listing in Reown's wallet registry, so that dApps show UP Wallet in their list (needs a store
