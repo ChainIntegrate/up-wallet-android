@@ -30,7 +30,13 @@ as in Cross_Chain's [SECURITY.md](https://github.com/ChainIntegrate/Cross_Chain/
 unknown, choose "More details" → "Install anyway" (the app is not on the Play Store). Play Protect may
 also offer to scan the app at an update: the scan is Google's check of apps from developers it has
 not verified yet, not a change in the app (see [docs/developer-verification.md](docs/developer-verification.md)).
-Updates install over the previous version, keeping its data. You need a Universal Profile with an
+Updates install over the previous version, keeping its data and the phone key. **Never uninstall the app
+to update it.** The phone key has no copy and app data are not backed up: it is deleted by uninstalling
+the app, by clearing its data in Android's settings, by removing the screen lock (Android then makes it
+unusable for good; on some phones changing the lock's type does too) and by a factory reset. A new
+fingerprint does not delete it (`setInvalidatedByBiometricEnrollment(false)`). Before any of these, send
+the key's balance to the UP ("This phone") and revoke it from the site's Backup page; then create a new
+key and authorize it again. You need a Universal Profile with an
 admin controller you can use on a computer (for example in MetaMask), to authorize the phone key once
 on each network. The site's guide has the same steps.
 
