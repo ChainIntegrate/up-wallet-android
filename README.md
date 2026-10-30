@@ -333,6 +333,13 @@ Improvements (changes to the page itself are collected in Cross_Chain's
 - A dApp on a chain other than the one chosen in the page (OpenSea's cross-chain checkout) is refused
   by design: one UP, one network per session. Since 0.8.1 a switch request is refused with 4001 and the
   dApp is told the session's network, and the log says which network to choose in the dApp.
+- **Next, structural: a signing window as in the browser extension** (decided 2026-10-30). Today the page
+  and the phone key share one WebView, and the `PhoneKey` plugin signs the digest the page's JavaScript
+  computes, with the prompt's text the page writes. The app gets the extension's three layers: the page's
+  request window, then a separate signing screen (its own Activity and WebView, no dApp, no WalletConnect,
+  no network) that computes what is signed from the request itself and shows it, sharing the extension's
+  signing logic, then the fingerprint; the native plugin signs only for that screen. Reviewed by two
+  providers before its release (Cross_Chain's `WALLET-BACKLOG.md`, item 6; `AUDIT.md`, review policy).
 - Later: the phone key signing inside the Keystore itself (P-256: the Keystore cannot use Ethereum's
   curve, so today the key is decrypted in the app for each signature). It needs a contract on the UP that
   checks such signatures and a professional audit: Cross_Chain's roadmap, step 8.
