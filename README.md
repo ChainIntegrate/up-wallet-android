@@ -26,7 +26,8 @@ as in Cross_Chain's [SECURITY.md](https://github.com/ChainIntegrate/Cross_Chain/
 
 **Download**: the APK of each version is attached to its
 [release](https://github.com/ChainIntegrate/up-wallet-android/releases). On the phone, open the
-`.apk` and allow installing from that source when Android asks; if Play Protect warns that the app is
+`.apk`; the first time, Android says it can't install apps from that source (for example Chrome) and offers
+Settings: turn on "Allow from this source" for that app and go back, the install goes on; if Play Protect warns that the app is
 unknown, choose "More details" → "Install anyway" (the app is not on the Play Store). Play Protect may
 also offer to scan the app at an update: the scan is Google's check of apps from developers it has
 not verified yet, not a change in the app (see [docs/developer-verification.md](docs/developer-verification.md)).
