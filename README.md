@@ -244,6 +244,10 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     default, euro prices, the index read shown); the fingerprint prompt decodes the Key Manager's
     `execute(bytes)`; the panel "This phone" shows the key's name and its own balance, sent to the UP;
     the phone key connects by itself at every opening;
+  - **0.9.8** (patch): page 0.13.0 (ChainIntegrate's Traceability Registry decoded on LUKSO, and any
+    contract verified on LUKSO's Blockscout; contacts for sends, with the address-poisoning warning; the
+    site relayer checked before a request is prepared; the "never accept an EIP-7702 upgrade on the
+    admin controller" note);
   - **0.9.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
