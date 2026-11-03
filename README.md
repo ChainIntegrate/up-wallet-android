@@ -259,8 +259,8 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     contract verified on LUKSO's Blockscout; contacts for sends, with the address-poisoning warning; the
     site relayer checked before a request is prepared; the "never accept an EIP-7702 upgrade on the
     admin controller" note);
-  - **0.10.0** (minor, structural): the signing window (above), reviewed by two providers before its
-    release; the panel "This phone" links to the LUKSO authorization page on LUKSO;
+  - **0.10.0** (minor, structural): the signing window (above), reviewed by two providers right after
+    its release; the panel "This phone" links to the LUKSO authorization page on LUKSO;
   - **0.10.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
@@ -353,7 +353,8 @@ Improvements (changes to the page itself are collected in Cross_Chain's
   dApp is told the session's network, and the log says which network to choose in the dApp.
 - **Done in 0.10.0, structural: the signing window as in the browser extension** (decided 2026-10-30):
   the page's request window, then the separate signing window (its own Activity and WebView), then the
-  fingerprint. Reviewed by two providers before its release (Cross_Chain's `AUDIT.md`, review policy).
+  fingerprint. Reviewed by two providers right after its release, the gaps found fixed in a patch
+  (Cross_Chain's `AUDIT.md`, review policy).
 - Later: the phone key signing inside the Keystore itself (P-256: the Keystore cannot use Ethereum's
   curve, so today the key is decrypted in the app for each signature). It needs a contract on the UP that
   checks such signatures and a professional audit: Cross_Chain's roadmap, step 8.
