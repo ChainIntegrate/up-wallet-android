@@ -1,16 +1,20 @@
-// app/phone-key.js with the page (0.9.0): the page finds the phone key as its signing wallet; messages,
-// typed data and transactions are hashed in the page, signed by the PhoneKey plugin (here a mock with an
-// ethers wallet, window.__upwalletPhoneKey), and transactions are sent to the network's RPC (mocked).
-// The native signing itself (Secp256k1.java) is checked against ethers by test/secp256k1/. Run after `npm run web`.
+// app/phone-key.js with the page (0.9.0): the page finds the phone key as its signing wallet. From 0.10.0 the
+// page sends structured requests (a message, typed data, a transaction, an operation of the UP) to the PhoneKey
+// plugin's request(), which opens the signing window: here a mock (window.__upwalletPhoneKey) that does what
+// the window does, with the window's own plan (sign-plan.js, from the signer bundle) and an ethers wallet in
+// place of the Keystore. Transactions are sent to the network's RPC (mocked). The window itself is checked by
+// test/signer.js; the native signing (Secp256k1.java) by test/secp256k1/. Run after `npm run web`.
 "use strict";
 const fs = require("fs"), path = require("path");
 const { chromium } = require(process.env.PLAYWRIGHT || "playwright");
 const { ethers } = require("ethers");
 
 const ROOT = path.join(__dirname, ".."), WWW = path.join(ROOT, "www");
+const SIGNER_JS = path.join(ROOT, "android/app/src/main/assets/signer/signer.js");
 const TYPES = { ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".ico": "image/x-icon", ".html": "text/html" };
 const res = []; const ck = (n, c, x = "") => res.push(`${c ? "PASS" : "FAIL"} ${n}${c ? "" : "\n      " + String(x).slice(0, 1200)}`);
 const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27", TO = "0x" + "77".repeat(20);
+const row = (rows, label) => ((rows || []).find((r) => r[0] === label) || [])[1];
 const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns (bytes[])"]);
 
 (async () => {
@@ -51,6 +55,7 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
       return r.fulfill({ contentType: "application/json", body: JSON.stringify(Array.isArray(q) ? q.map(one) : one(q)) });
     }
     if (u.host !== "localhost") return r.abort();
+    if (u.pathname === "/__signer.js") return r.fulfill({ body: fs.readFileSync(SIGNER_JS), contentType: "application/javascript" });
     const f = path.join(WWW, decodeURIComponent(u.pathname === "/" ? "/index.html" : u.pathname));
     if (!fs.existsSync(f)) return r.fulfill({ status: 404, body: "" });
     r.fulfill({ body: fs.readFileSync(f), contentType: TYPES[path.extname(f)] || "application/octet-stream" });
@@ -64,18 +69,25 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
     window.__upwalletPhoneKey = {
       async status() { restore(); const w = window.__pk.wallet; return { exists: !!w, address: w ? w.address.toLowerCase() : null, hardware: w ? "tee" : null, canAuth: true }; },
       async create(o) { window.__pk.prompts.push(["create", o.subtitle]); if (window.__pk.cancel) throw Object.assign(new Error("canceled"), { code: "CANCELED" }); window.__pk.wallet = ethers.Wallet.createRandom(); localStorage.setItem("__pkTest", window.__pk.wallet.privateKey); return { address: window.__pk.wallet.address.toLowerCase() }; },
-      async sign(o) {
+      // The signing window: the plan computed from the request (a refusal comes back as its code, in a string,
+      // without a fingerprint prompt); "Sign" records the prompt; closing the window is 4001.
+      async request(o) {
         restore();
-        window.__pk.prompts.push(["sign", o.subtitle, o.digest, o.description]);
-        if (window.__pk.cancel) throw Object.assign(new Error("canceled"), { code: "CANCELED" });
         if (!window.__pk.wallet) throw Object.assign(new Error("no key"), { code: "NO_KEY" });
-        return { signature: window.__pk.wallet.signingKey.sign(o.digest).serialized };
+        while (!window.UpwSignPlan) await new Promise((ok) => setTimeout(ok, 10));
+        let pl;
+        try { pl = window.UpwSignPlan.plan(JSON.parse(o.request), window.__pk.wallet.address, o.lang); }
+        catch (e) { throw Object.assign(new Error(e.message), { code: String(e.code) }); }
+        window.__pk.prompts.push(["sign", pl.title, pl.digest, pl.rows, o.lang]);
+        if (window.__pk.cancel) throw Object.assign(new Error("User rejected the request."), { code: "4001" });
+        return { result: JSON.stringify(pl.finish(ethers.Signature.from(window.__pk.wallet.signingKey.sign(pl.digest).serialized))) };
       },
       async remove() { window.__pk.wallet = null; localStorage.removeItem("__pkTest"); },
     };
   });
   await p.goto("https://localhost/up-wallet.html");
   await p.waitForFunction(() => typeof ethers !== "undefined" && document.getElementById("connectSigner"));
+  await p.addScriptTag({ url: "/__signer.js" });   // the window's bundle, for its plan (served below)
 
   const seen = await p.evaluate(() => new Promise((ok) => {
     const got = [];
@@ -117,22 +129,21 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   });
   ck("personal_sign: signed by the phone key (recovers to its address)", ethers.verifyMessage("hello UP", sig.msg) === sig.addr, JSON.stringify(sig));
   ck("eth_signTypedData_v4: EIP-712 digest signed by the phone key", ethers.verifyTypedData({ name: "T", version: "1", chainId: 8453, verifyingContract: "0x" + "11".repeat(20) }, { Mail: [{ name: "to", type: "address" }, { name: "body", type: "string" }] }, { to: "0x" + "22".repeat(20), body: "hi" }, sig.typed) === sig.addr, JSON.stringify(sig));
-  ck("the fingerprint prompt says what is signed", sig.prompts[0] === "Firma di un messaggio" && /Firma di dati strutturati \(Mail\)/.test(sig.prompts[1]), JSON.stringify(sig.prompts));
-  ck("PK-4: the prompt shows the message's text, and the typed data's domain (name, chain, contract)", sig.descs[0] === '"hello UP"' && sig.descs[1] === "T · rete 8453 · contratto 0x1111…1111", JSON.stringify(sig.descs));
+  ck("the signing window says what is signed (its title)", sig.prompts[0] === "Firma di un messaggio" && /Firma di dati strutturati \(Mail\)/.test(sig.prompts[1]), JSON.stringify(sig.prompts));
+  ck("PK-4: the window shows the message's text, and the typed data's domain (name, chain, contract) and content", row(sig.descs[0], "Messaggio") === "hello UP" && row(sig.descs[1], "Dominio") === "T · rete 8453 · 0x" + "11".repeat(20) && /"body": "hi"/.test(row(sig.descs[1], "Contenuto")), JSON.stringify(sig.descs));
   ck("PK-2: an opaque 32-byte message is refused by the key itself, without asking for the fingerprint", Array.isArray(sig.r32) && sig.r32[0] === 4100 && /32 byte/.test(sig.r32[1]) && !sig.asked32, JSON.stringify(sig.r32));
 
   // a transaction: built for the page's network, signed, sent raw to its RPC
   const tx = await p.evaluate(async (TO) => {
     const s = await new ethers.BrowserProvider(signerProvider).getSigner();
     const r = await signerProvider.request({ method: "eth_sendTransaction", params: [{ from: s.address, to: TO, value: "0x2386f26fc10000", data: "0x1234", chainId: "0x2105", gas: "0x9c40" }] });
-    return { hash: r, prompt: window.__pk.prompts.at(-1)[1] };
+    return { hash: r, prompt: window.__pk.prompts.at(-1) };
   }, TO);
   const t = ethers.Transaction.from(raws[0] || "0x");
   ck("eth_sendTransaction: a signed EIP-1559 transaction for Base, from the phone key, with the page's fields and the RPC's nonce, sent raw",
     raws.length === 1 && t.from === sig.addr && t.chainId === 8453n && t.to === ethers.getAddress(TO) && t.value === 10n ** 16n && t.data === "0x1234" && t.gasLimit === 40000n && t.nonce === 7 && t.type === 2 && tx.hash === ethers.keccak256(raws[0]), JSON.stringify({ raw: raws[0], from: raws[0] && t.from }));
-  ck("the prompt names the network, the recipient and the value", /Transazione su Base verso 0x7777…7777, 0\.01 ETH/.test(tx.prompt), tx.prompt);
-  const txDesc = await p.evaluate(() => window.__pk.prompts.at(-1)[3]);
-  ck("PK-4: and the function it calls", txDesc === "Chiama la funzione 0x1234", txDesc);
+  ck("the window names the network, the recipient and the value", tx.prompt[1] === "Transazione su Base" && row(tx.prompt[3], "Verso") === ethers.getAddress(TO) && row(tx.prompt[3], "Valore") === "0.01 ETH" && row(tx.prompt[3], "Rete") === "Base (8453)", JSON.stringify(tx.prompt));
+  ck("PK-4: and the function it calls", row(tx.prompt[3], "Funzione") === "0x1234", JSON.stringify(tx.prompt[3]));
   // a transaction to the UP's Key Manager: the prompt says what the UP does inside execute(bytes)
   const kmDesc = await p.evaluate(async (TO) => {
     const up = new ethers.Interface(["function execute(uint256,address,uint256,bytes)"]).encodeFunctionData("execute", [0, TO, 10n ** 16n, "0x12345678"]);
@@ -140,7 +151,8 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
     await signerProvider.request({ method: "eth_sendTransaction", params: [{ from: signerAddress, to: "0x" + "4b".repeat(20), data, chainId: "0x2105", gas: "0x9c40" }] });
     return window.__pk.prompts.at(-1)[3];
   }, TO);
-  ck("a transaction through the Key Manager (execute(bytes)): the prompt says what the UP does (recipient, value, function)", kmDesc === "Tramite il Key Manager della UP: verso 0x7777…7777, 0.01 ETH, funzione 0x12345678", kmDesc);
+  const kmText = kmDesc.map((r) => r.join(": ")).join(" | ");
+  ck("a transaction through the Key Manager (execute(bytes)): the window says what the UP does (recipient, value, function)", /Funzione: execute\(bytes\): la UP esegue \| Verso: 0x7777777777777777777777777777777777777777 \| Valore: 0\.01 ETH \| Funzione: 0x12345678/.test(kmText), kmText);
   // the key's name and own balance on the page's network; the balance sent to the UP
   await p.waitForFunction(() => /Nome sulla UP \(Base\): Pixel di prova/.test(document.getElementById("pkPanel").innerText) && /Saldo della chiave su Base: 0\.01 ETH/.test(document.getElementById("pkPanel").innerText), null, { timeout: 8000 }).catch(() => null);
   const panel2 = await p.evaluate(() => ({ text: document.getElementById("pkPanel").innerText, link: [...document.querySelectorAll("#pkPanel a")].map((a) => a.href)[0] }));
@@ -149,9 +161,9 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   await p.evaluate(() => [...document.querySelectorAll("#pkPanel button")].find((x) => /Manda il saldo/.test(x.textContent)).click());
   await p.waitForFunction(() => /Inviato alla UP: 0x[0-9a-f]{64}/.test(document.getElementById("pkPanel").innerText), null, { timeout: 8000 }).catch(() => null);
   const swept = raws.length > nRaw ? ethers.Transaction.from(raws.at(-1)) : null;
-  const swPrompt = await p.evaluate(() => window.__pk.prompts.at(-1)[1]);
+  const swPrompt = await p.evaluate(() => window.__pk.prompts.at(-1));
   const fee = swept ? (swept.maxFeePerGas ?? swept.gasPrice) : 0n;
-  ck("sending the balance: a plain transfer to the page's UP, the balance minus the maximum fee, after the fingerprint prompt naming the UP", swept && swept.to === UP && swept.value > 0n && swept.value + swept.gasLimit * fee === 10n ** 16n && /Transazione su Base verso 0x4a26…8c27/.test(swPrompt), swept ? JSON.stringify({ to: swept.to, value: String(swept.value), prompt: swPrompt }) : "no transaction");
+  ck("sending the balance: a plain transfer to the page's UP, the balance minus the maximum fee, after the fingerprint prompt naming the UP", swept && swept.to === UP && swept.value > 0n && swept.value + swept.gasLimit * fee === 10n ** 16n && swPrompt[1] === "Transazione su Base" && row(swPrompt[3], "Verso") === UP, swept ? JSON.stringify({ to: swept.to, value: String(swept.value), prompt: swPrompt }) : "no transaction");
 
   // PK-2: an ERC-4337 operation of the UP, through the gas relay client: the key computes the hash itself
   const EP = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
@@ -175,7 +187,7 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   }, [ser(op), H]);
   ck("PK-2: the gas relay has the phone key sign the operation (upwallet_signUserOperation): the signature is the personal_sign of the hash the page computed",
     ethers.isHexString(relay.sig, 65) && ethers.verifyMessage(ethers.getBytes(H), relay.sig) === sig.addr && relay.logs.some((m) => /firmato/i.test(m)), JSON.stringify(relay));
-  ck("PK-4: its prompt says the operation, the UP, the recipient, the value, the function and who pays the gas", relay.subtitle === "Operazione della UP su Base" && relay.desc === "UP 0x4a26…8c27: verso 0x7777…7777, 0.01 ETH, funzione 0x12345678. Gas pagato dal sito.", JSON.stringify([relay.subtitle, relay.desc]));
+  ck("PK-4: its window says the operation, the UP, the recipient, the value, the function and who pays the gas", relay.subtitle === "Operazione della UP su Base" && row(relay.desc, "UP") === UP && row(relay.desc, "Verso") === ethers.getAddress(TO) && row(relay.desc, "Valore") === "0.01 ETH" && row(relay.desc, "Funzione") === "0x12345678" && /pagato dal sito/.test(row(relay.desc, "Gas")), JSON.stringify([relay.subtitle, relay.desc]));
   const opRefusals = await p.evaluate(async ([o]) => {
     const call = async (x) => { const n = window.__pk.prompts.length; try { await signerProvider.request({ method: "upwallet_signUserOperation", params: [x] }); return "signed"; } catch (e) { return [e.code, window.__pk.prompts.length === n]; } };
     return {
@@ -196,7 +208,7 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
 
   // cancel, networks, refusals
   const cancel = await p.evaluate(async () => { window.__pk.cancel = true; try { await signerProvider.request({ method: "personal_sign", params: ["0x01", window.__pk.wallet.address] }); return "signed"; } catch (e) { return e.code; } finally { window.__pk.cancel = false; } });
-  ck("the prompt closed by the user: 4001 (user rejected), as a wallet answers", cancel === 4001, String(cancel));
+  ck("the signing window closed by the user: 4001 (user rejected), as a wallet answers", cancel === 4001, String(cancel));
   const other = await p.evaluate(async () => { try { await signerProvider.request({ method: "personal_sign", params: ["0x01", "0x" + "99".repeat(20)] }); return "signed"; } catch (e) { return e.code; } });
   ck("a signature for another account: refused", other === 4100, String(other));
   const ethSign = await p.evaluate(async () => { try { await signerProvider.request({ method: "eth_sign", params: [] }); return "signed"; } catch (e) { return e.code; } });

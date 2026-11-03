@@ -52,6 +52,14 @@
 
         </activity>
 
+        <!-- The signing window (SignerActivity): its own WebView with only the app's signing code. Not exported:
+             only the app opens it. Configuration changes do not recreate it (a recreation would reject). -->
+        <activity
+            android:name=".SignerActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density" />
+
         <!-- Keeps the app running while a dApp is connected (see KeepAliveService). Android 14+:
              "special use" (no daily time limit; dataSync has about 6 hours a day on Android 15+);
              older versions: dataSync. -->

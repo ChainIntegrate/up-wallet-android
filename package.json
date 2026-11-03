@@ -6,7 +6,7 @@
   "scripts": {
     "web": "node scripts/build-web.js",
     "sync": "npm run web && npx cap sync android",
-    "test": "node test/mobile-layout.js && node test/phone-key.js && node test/native.js"
+    "test": "node test/mobile-layout.js && node test/phone-key.js && node test/signer.js && node test/native.js"
   },
   "dependencies": {
     "@capacitor-mlkit/barcode-scanning": "8.2.1",

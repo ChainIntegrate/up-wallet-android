@@ -1,10 +1,14 @@
 // UP Wallet app (from 0.9.0): the phone key as the page's signing wallet, instead of MetaMask.
 // The key is a controller of the UP, created and kept on this phone by the native PhoneKey plugin
 // (PhoneKeyPlugin.java): encrypted with the Android Keystore and unlocked by the fingerprint (or PIN) for
-// every signature, the signature made in native code. This file only builds what is signed (the 32-byte
-// digest of a message, typed data or transaction), asks the plugin for the signature, and sends signed
-// transactions to the network's RPC. It is announced to the page through EIP-6963, as the browser
-// extension is: the page uses it as any wallet, its checks and confirmation window unchanged.
+// every signature, the signature made in native code. From 0.10.0 this page never has a digest signed: it
+// sends the structured request (a message, typed data, a transaction, an operation of the UP) to the
+// signing window (SignerActivity, its own WebView with app/signer/), which computes again what is signed,
+// shows it and asks for the fingerprint, as the browser extension's signing window does. This file prepares
+// the request (a transaction's nonce, gas and fees from the network's RPC), refuses early what the window
+// would refuse, and sends signed transactions to the network's RPC. It is announced to the page through
+// EIP-6963, as the browser extension is: the page uses it as any wallet, its checks and confirmation window
+// unchanged.
 // It also adds, under the page's "connect" button: the phone key's address (copy, QR), the link to the
 // site's Backup page that authorizes it on the UP, and the warning shown until accepted.
 // Bundled by scripts/build-web.js (esbuild) into www/app/phone-key.js; loaded after chains.js.
@@ -39,6 +43,11 @@ const T = {
   copied: () => (en() ? "Copied" : "Copiato"),
   qr: () => (en() ? "Show QR" : "Mostra QR"),
   open: () => (en() ? "Open the Backup page" : "Apri la pagina Backup"),
+  // On LUKSO the key is authorized with LUKSO's own wallet (the Universal Profile extension or app), no MetaMask.
+  openLukso: () => (en() ? "Authorize on LUKSO (with LUKSO's wallet)" : "Autorizza su LUKSO (con il wallet di LUKSO)"),
+  authHintLukso: () => (en()
+    ? "To use it on LUKSO, authorize it once with LUKSO's own wallet (the Universal Profiles app on this phone, or the Universal Profile extension on a computer): the button below opens the page, with this key's address filled in. A lost phone is revoked from the same page. On the other networks: the site's Backup page."
+    : "Per usarla su LUKSO, autorizzala una volta con il wallet di LUKSO (l'app Universal Profiles su questo telefono, o l'estensione Universal Profile sul computer): il pulsante qui sotto apre la pagina, con l'indirizzo di questa chiave già scritto. Un telefono perso si revoca dalla stessa pagina. Sulle altre reti: pagina Backup del sito."),
   remove: () => (en() ? "Delete the phone key" : "Elimina la chiave del telefono"),
   named: (name, net) => (en() ? `Name on the UP (${net}): ${name}` : `Nome sulla UP (${net}): ${name}`),
   unnamed: (net) => (en() ? `No name on the UP on ${net}: it can be given from the Backup page.` : `Nessun nome sulla UP su ${net}: si può dare dalla pagina Backup.`),
@@ -47,7 +56,6 @@ const T = {
   sweepNoUp: () => (en() ? "Choose the UP in the page first." : "Prima scegli la UP nella pagina."),
   sweepLow: () => (en() ? "The balance does not cover the transfer's fee." : "Il saldo non copre la commissione del trasferimento."),
   sweepSent: (h) => (en() ? `Sent to the UP: ${h}` : `Inviato alla UP: ${h}`),
-  txKm: (what) => (en() ? `Through the UP's Key Manager: ${what}` : `Tramite il Key Manager della UP: ${what}`),
   removeAsk: () => (en()
     ? "Delete the phone key from this phone? It cannot be recovered. First send its balance to the UP (\"This phone\", on every network where it has some) and revoke it on every network (site, Backup page), or it stays a controller of the UP that nobody can use."
     : "Eliminare la chiave del telefono? Non si può recuperare. Prima manda alla UP il suo saldo (\"Questo telefono\", su ogni rete dove ne ha) e revocala su ogni rete (sito, pagina Backup), altrimenti resta un controller della UP che nessuno può usare."),
@@ -58,21 +66,10 @@ const T = {
   promptCreate: () => (en() ? "Create the phone key" : "Crea la chiave del telefono"),
   promptDesc: () => (en() ? "The key stays on this phone, encrypted. It signs only after your confirmation." : "La chiave resta su questo telefono, cifrata. Firma solo dopo la tua conferma."),
   cancel: () => (en() ? "Cancel" : "Annulla"),
-  signMsg: () => (en() ? "Sign a message" : "Firma di un messaggio"),
-  msgBytes: (n, h) => (en() ? `${n} bytes, not text: ${h}` : `${n} byte, non testo: ${h}`),
-  typedDomain: (name, chain, contract) => [name, chain ? (en() ? `chain ${chain}` : `rete ${chain}`) : "", contract ? (en() ? `contract ${contract}` : `contratto ${contract}`) : ""].filter(Boolean).join(" · "),
-  txData: (sel) => (sel ? (en() ? `Calls the function ${sel}` : `Chiama la funzione ${sel}`) : (en() ? "No data: a plain transfer" : "Nessun dato: un semplice invio")),
-  signOp: (net) => (en() ? `Operation of the UP on ${net}` : `Operazione della UP su ${net}`),
-  opWhat: (up, what) => (en() ? `UP ${up}: ${what}. Gas paid by the site.` : `UP ${up}: ${what}. Gas pagato dal sito.`),
-  opCall: (to, v, sel) => (en() ? `to ${to}` : `verso ${to}`) + (v ? `, ${v}` : "") + (sel ? (en() ? `, function ${sel}` : `, funzione ${sel}`) : ""),
-  opBatch: (n) => (en() ? `${n} calls in one operation` : `${n} chiamate in un'operazione`),
-  opOther: (sel) => (en() ? `UP function ${sel}` : `funzione della UP ${sel}`),
   opaque32: () => (en()
     ? "The phone key does not sign an opaque 32-byte message: it could authorize an operation of the UP on another network."
     : "La chiave del telefono non firma un messaggio opaco di 32 byte: potrebbe autorizzare un'operazione della UP su un'altra rete."),
   badOp: (why) => (en() ? `Operation not signed: ${why}` : `Operazione non firmata: ${why}`),
-  signTyped: (p) => (en() ? `Sign typed data (${p})` : `Firma di dati strutturati (${p})`),
-  signTx: (net, to, v) => (en() ? `Transaction on ${net} to ${to}${v ? `, ${v}` : ""}` : `Transazione su ${net} verso ${to}${v ? `, ${v}` : ""}`),
   noSite: () => (en() ? "No network chosen in the page." : "Nessuna rete scelta nella pagina."),
   warnTitle: () => (en() ? "UP Wallet 0.9: experimental wallet" : "UP Wallet 0.9: wallet sperimentale"),
   warn: () => (en()
@@ -128,7 +125,9 @@ function rpcFor(net) {
 const rpcError = (code, message) => Object.assign(new Error(message), { code });
 function fromNative(e) {
   const c = e && e.code;
-  if (c === "CANCELED") return rpcError(4001, "User rejected the request.");
+  if (c === "CANCELED" || c === "4001") return rpcError(4001, "User rejected the request.");
+  // A refusal of the signing window (sign-plan.js): its EIP-1193 code, as a string.
+  if (typeof c === "string" && /^-?\d+$/.test(c)) return rpcError(Number(c), (e && e.message) || "refused");
   if (c === "NO_AUTH") return rpcError(4100, T.noAuth());
   if (c === "INVALIDATED") return rpcError(4100, T.invalidated());
   if (c === "NO_KEY") return rpcError(4100, T.none());
@@ -158,34 +157,27 @@ async function ensureKey() {
   renderPanel();
   return address;
 }
-async function signDigest(digest, subtitle, detail) {
+// One request to the signing window (SignerActivity): it answers with the result (a signature, or a signed
+// transaction), or a refusal. The window takes the key's address from the app's storage, not from here.
+async function ask(req) {
   if (!address) await status();
   if (!address) throw rpcError(4100, T.none());
   const t0 = Date.now();
   try {
-    // The fingerprint prompt says what is signed, from the signed data itself (AUDIT 2026-10-26 PK-4).
-    const r = await PK.sign({ digest, title: "UP Wallet", subtitle, description: detail || T.promptDesc(), cancel: T.cancel() });
+    const r = await PK.request({ request: JSON.stringify({ ...req, site: req.site || null }), lang: en() ? "en" : "it" });
     diag(`PhoneKey: signed (${Math.round((Date.now() - t0) / 1000)} s)`);
-    return r.signature;
+    return JSON.parse(r.result);
   } catch (e) {
     diag(`PhoneKey: ${e && e.code ? e.code : "error"}`);
     throw fromNative(e);
   }
 }
+// The dApp asking, for the signing window's header: the WalletConnect session the page's request window is for.
+const site = () => (typeof window.__upwalletRequestSite === "string" ? window.__upwalletRequestSite.slice(0, 200) : null);
 const sameAddr = (a) => typeof a === "string" && ethers.isAddress(a) && address && ethers.getAddress(a) === address;
 
-// ---- what is signed
+// ---- the requests (the signing window computes what is signed from them)
 function messageBytes(m) { return typeof m === "string" && ethers.isHexString(m) ? ethers.getBytes(m) : ethers.toUtf8Bytes(String(m)); }
-// One line of untrusted text for the fingerprint prompt: no control characters, clipped.
-const oneLine = (t, n) => { const c = String(t).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g, " ").trim(); return c.length > n ? c.slice(0, n - 1) + "…" : c; };
-function messagePreview(bytes) {
-  try {
-    const txt = ethers.toUtf8String(bytes);
-    if (!/[\u0000-\u0008\u000e-\u001f]/.test(txt)) return `"${oneLine(txt, 220)}"`;
-  } catch (e) { /* not UTF-8 */ }
-  const h = ethers.hexlify(bytes);
-  return T.msgBytes(bytes.length, h.length > 24 ? `${h.slice(0, 12)}…${h.slice(-8)}` : h);
-}
 async function personalSign(params) {
   const [m, a] = params || [];
   // Some dApps send (address, message): accept either order, never another account.
@@ -195,38 +187,14 @@ async function personalSign(params) {
   // A 32-byte message may be an operation hash: signed, it authorizes an operation of the UP wherever the phone
   // key has the 4337 permission (AUDIT 2026-10-02 H-2). The page refuses it too; this is the key's own guard
   // (AUDIT 2026-10-26 PK-2). The page's gas relay signs operations with upwallet_signUserOperation instead.
+  // The signing window refuses it too (sign-plan.js); here it does not even open.
   if (bytes.length === 32) throw rpcError(4100, T.opaque32());
-  return signDigest(ethers.hashMessage(bytes), T.signMsg(), messagePreview(bytes));
+  return ask({ kind: "message", message: msg, account: who, site: site() });
 }
 
-// ---- an ERC-4337 operation of the UP (the site relayer pays the gas): the hash is computed here, from the
-// operation, as EntryPoint v0.6 does, so the key signs a known operation and never an opaque 32 bytes.
+// ---- an ERC-4337 operation of the UP (the site relayer pays the gas): the signing window computes its hash
+// from the operation, as EntryPoint v0.6 does, so the key signs a known operation and never an opaque 32 bytes.
 const ENTRY_POINT = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
-const UP_IFACE = new ethers.Interface(["function execute(uint256,address,uint256,bytes)", "function executeBatch(uint256[],address[],uint256[],bytes[])"]);
-function userOpHash(op, chainId) {
-  const enc = (t, v) => ethers.AbiCoder.defaultAbiCoder().encode(t, v);
-  const packed = enc(
-    ["address", "uint256", "bytes32", "bytes32", "uint256", "uint256", "uint256", "uint256", "uint256", "bytes32"],
-    [op.sender, op.nonce, ethers.keccak256(op.initCode), ethers.keccak256(op.callData), op.callGasLimit,
-      op.verificationGasLimit, op.preVerificationGas, op.maxFeePerGas, op.maxPriorityFeePerGas, ethers.keccak256(op.paymasterAndData)]);
-  return ethers.keccak256(enc(["bytes32", "address", "uint256"], [ethers.keccak256(packed), ENTRY_POINT, chainId]));
-}
-// What the UP does, from its execute / executeBatch call data (a gas-relay operation, or the payload of the
-// Key Manager's execute(bytes)), for the fingerprint prompt.
-function upWhat(callData, net) {
-  let what;
-  try {
-    const d = UP_IFACE.parseTransaction({ data: callData });
-    if (d.name === "execute") {
-      const [, to, value, data] = d.args;
-      const v = value > 0n ? `${ethers.formatEther(value)} ${net.currency || ""}`.trim() : "";
-      what = T.opCall(short(to), v, ethers.dataLength(data) >= 4 ? ethers.dataSlice(data, 0, 4) : "");
-    } else what = T.opBatch(d.args[1].length);
-  } catch (e) { what = T.opOther(ethers.dataLength(callData) >= 4 ? ethers.dataSlice(callData, 0, 4) : "0x"); }
-  return what;
-}
-function opSummary(op, net) { return T.opWhat(short(op.sender), upWhat(op.callData, net)); }
-const KM_IFACE = new ethers.Interface(["function execute(bytes)"]);
 async function signUserOperation(params) {
   const { op: raw, entryPoint, chainId } = (params || [])[0] || {};
   const net = await currentNet();
@@ -244,20 +212,14 @@ async function signUserOperation(params) {
   const upEl = $("upAddress");
   const up = upEl && ethers.isAddress(upEl.value.trim()) ? ethers.getAddress(upEl.value.trim()) : null;
   if (!up || op.sender !== up) throw rpcError(4100, T.badOp("not the UP chosen in the page"));
-  const hash = userOpHash(op, net.chainId);
-  // Extension4337 checks a personal_sign of the operation hash.
-  return signDigest(ethers.hashMessage(ethers.getBytes(hash)), T.signOp(net.name), opSummary(op, net));
+  const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
+  return ask({ kind: "userop", op: str(op), entryPoint, chainId: net.chainId, up, net: { name: net.name, currency: net.currency || "" } });
 }
 async function signTyped(params) {
   const [a, data] = params || [];
   if (!sameAddr(a)) throw rpcError(4100, "not the phone key's account");
-  const j = typeof data === "string" ? JSON.parse(data) : data;
-  const types = { ...(j.types || {}) };
-  delete types.EIP712Domain;
-  const digest = ethers.TypedDataEncoder.hash(j.domain || {}, types, j.message || {});
-  const dom = j.domain || {};
-  return signDigest(digest, T.signTyped(String(j.primaryType || "").replace(/[^\w]/g, "").slice(0, 40) || "EIP-712"),
-    T.typedDomain(oneLine(dom.name || "", 60), dom.chainId != null && /^(0x[0-9a-f]+|\d+)$/i.test(String(dom.chainId)) ? BigInt(dom.chainId).toString() : "", dom.verifyingContract && ethers.isAddress(dom.verifyingContract) ? short(ethers.getAddress(dom.verifyingContract)) : "") || undefined);
+  const n = await currentNet();
+  return ask({ kind: "typed", account: a, data: typeof data === "string" ? data : JSON.stringify(data), chainId: n ? n.chainId : null, site: site() });
 }
 const big = (v) => (v === undefined || v === null || v === "" ? null : BigInt(v));
 async function sendTransaction(params) {
@@ -277,19 +239,12 @@ async function sendTransaction(params) {
     const f = await rpc.getFeeData();
     fees = f.maxFeePerGas != null ? { type: 2, maxFeePerGas: f.maxFeePerGas, maxPriorityFeePerGas: f.maxPriorityFeePerGas ?? 0n } : { type: 0, gasPrice: f.gasPrice };
   }
-  const t = ethers.Transaction.from({ ...base, nonce, gasLimit, chainId: net.chainId, ...fees });
-  const value = base.value > 0n ? `${ethers.formatEther(base.value)} ${net.currency || ""}`.trim() : "";
-  // A transaction to the UP's Key Manager: the prompt says what the UP does (execute(bytes): its execute or
-  // executeBatch inside), not only the Key Manager's function.
-  let detail = T.txData(ethers.dataLength(base.data) ? ethers.dataSlice(base.data, 0, Math.min(4, ethers.dataLength(base.data))) : "");
-  try {
-    const [payload] = KM_IFACE.decodeFunctionData("execute", base.data);
-    detail = T.txKm(upWhat(payload, net));
-  } catch (e) { /* not the Key Manager's execute(bytes) */ }
-  const sig = await signDigest(t.unsignedHash, T.signTx(net.name, base.to ? short(base.to) : "—", value), detail);
-  t.signature = ethers.Signature.from(sig);
-  if (ethers.getAddress(t.from) !== address) throw rpcError(-32603, "signature check failed");
-  return rpc.send("eth_sendRawTransaction", [t.serialized]);
+  const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
+  // The signing window shows the transaction as signed (and, through the Key Manager, what the UP does).
+  const raw = await ask({ kind: "tx", tx: str({ ...base, nonce, gasLimit, chainId: net.chainId, ...fees }), net: { name: net.name, currency: net.currency || "" }, site: site() });
+  const t = ethers.Transaction.from(raw);
+  if (ethers.getAddress(t.from) !== address || Number(t.chainId) !== net.chainId) throw rpcError(-32603, "signature check failed");
+  return rpc.send("eth_sendRawTransaction", [raw]);
 }
 
 // ---- the EIP-1193 provider
@@ -403,8 +358,16 @@ async function sweep() {
   keyBal = { k: "", wei: null };
   renderPanel();
 }
+// On LUKSO, the page that authorizes the key with LUKSO's own wallet (it takes the UP from that wallet);
+// elsewhere, the Backup page (signed in MetaMask, on a computer).
+const onLukso = () => { const n = knownNet(); return !!n && (n.key === "lukso" || n.key === "lukso-testnet"); };
 function backupLink() {
   const q = new URLSearchParams();
+  if (onLukso()) {
+    q.set("network", knownNet().key);
+    if (address) { q.set("phone", address); q.set("device", "phone"); }
+    return `${SITE}up-authorize-lukso.html?${q}`;
+  }
   if (address) { q.set("phone", address); q.set("device", "phone"); }
   const up = $("upAddress") && $("upAddress").value.trim();
   if (up && ethers.isAddress(up)) q.set("up", ethers.getAddress(up));
@@ -438,7 +401,7 @@ function renderPanel() {
   if (bk && keyBal.k !== bk) refreshBal(n, bk);
   else if (bal !== null) add("div", T.bal(`${ethers.formatEther(bal)} ${n.currency || ""}`.trim(), n.name)).style.cssText = "margin:4px 0;";
   if (sweepNote) add("div", sweepNote).style.cssText = "margin:4px 0;overflow-wrap:anywhere;";
-  add("div", T.authHint());
+  add("div", onLukso() ? T.authHintLukso() : T.authHint());
   const row = add("div"); row.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;";
   const btn = (text, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "secondary small"; b.textContent = text; b.addEventListener("click", fn); row.appendChild(b); return b; };
   const copy = btn(T.copy(), async () => {
@@ -455,7 +418,7 @@ function renderPanel() {
     box.appendChild(q);
   });
   const link = document.createElement("a");
-  link.href = backupLink(); link.target = "_blank"; link.rel = "noopener"; link.textContent = T.open();
+  link.href = backupLink(); link.target = "_blank"; link.rel = "noopener"; link.textContent = onLukso() ? T.openLukso() : T.open();
   link.className = "secondary small"; link.style.alignSelf = "center";
   link.addEventListener("click", () => { link.href = backupLink(); });
   row.appendChild(link);

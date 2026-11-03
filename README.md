@@ -78,10 +78,11 @@ How it works:
   plain transfer to the page's UP, the balance minus the maximum fee, after the fingerprint: a lost key
   has no copy, and neither has its balance), delete. At every opening the key connects by itself (it only
   reads its address, no fingerprint), with the last UP used and the network.
-- **The fingerprint prompt says what is signed**, from the signed data: the message's text, the typed
-  data's domain, the transaction's network, recipient, value and function, and for a transaction to the
-  UP's Key Manager (`execute(bytes)`) what the UP does inside (each call's recipient, value and function),
-  as for a gas-relay operation.
+- **The signing window says what is signed** (0.10.0; before, the fingerprint prompt's text): a screen
+  of its own, over the app, that computes what is signed from the request and shows the message's text,
+  the typed data's domain and content, the transaction's network, recipient, value, function and maximum
+  gas, and for a transaction to the UP's Key Manager (`execute(bytes)`) what the UP does inside (each
+  call's recipient, value and function), as for a gas-relay operation. "Sign", then the fingerprint.
 - **One key per device, by choice.** No export, import, backup or sync of the key, not even encrypted: a
   new phone (or computer, with the browser extension) gets its own key and one "Authorize a device". Each
   device is a controller of its own, revoked alone if lost; a key that never leaves its device cannot be
@@ -116,16 +117,26 @@ on the site.
   (without `DOCUMENT_START_SCRIPT`) would fall back to an inline script that the policy blocks, and the
   native features would not work there.
 - `app/phone-key.js` (bundled with esbuild): the phone key as the page's signing wallet, announced to
-  the page through EIP-6963 as "Phone key (UP Wallet)", the way the browser extension is. It builds what
-  is signed (the EIP-191 digest of a message, the EIP-712 digest of typed data, a transaction's hash) and
-  asks the native `PhoneKey` plugin (`PhoneKeyPlugin.java`, `Secp256k1.java`) for the signature, which
-  asks for the fingerprint or PIN each time; signed transactions go to the network's RPC. It follows the
-  network chosen in the page; the fingerprint prompt says what is signed (for a transaction to the UP's
-  Key Manager, what the UP does inside `execute(bytes)`). It also shows the first-start warning and, under
+  the page through EIP-6963 as "Phone key (UP Wallet)", the way the browser extension is. From 0.10.0 it
+  never has a digest signed: it sends the native `PhoneKey` plugin a structured request (a message, typed
+  data, a transaction with its nonce, fees and network, an operation of the UP for the gas relay), which
+  opens the signing window (below); signed transactions go to the network's RPC. It follows the network
+  chosen in the page. It also shows the first-start warning and, under
   panel 3's button, "This phone": the key's address (copy, QR), its name kept on the UP, the link to the
   site's Backup page with phone, UP, network and "Phone · UP Wallet app" filled in, the key's own balance
   with "Send the key's balance to the UP", and "Delete the phone key". At every opening the key connects
   by itself (no fingerprint), with the last UP used (section "The phone key").
+- The signing window (0.10.0), as in the browser extension: `SignerActivity.java` opens over the app with
+  its own WebView, which loads only `app/signer/` (built into `android/app/src/main/assets/signer/`,
+  served by `WebViewAssetLoader`): no network, no navigation, no dApp, no WalletConnect. Its script
+  computes what is signed again from the request with `app/sign-plan.js` (the extension's own file,
+  `ext/sign-plan.js`), refuses what the key never signs (an opaque 32-byte message, another account,
+  typed data for another network, an operation of another UP or EntryPoint), shows the request (for a
+  transaction to the UP's Key Manager, what the UP does inside `execute(bytes)`), and answers only a
+  moment after it is shown. "Sign" opens the fingerprint or PIN prompt over the window; the key
+  (`Secp256k1.java`) signs that digest, the signature is checked against the key's address, and the window
+  gives the page the signature or the signed transaction. Closing it rejects the request (4001). The
+  `SignerBridge` that reaches the key exists only in that WebView; the plugin no longer signs a digest.
 - `app/native.js` (bundled): a Paste button for the WalletConnect link; a `wc:` link opened with the
   app or text shared to it (Share -> UP Wallet) is put in the link field (the native side is
   `IncomingLinkPlugin.java`); connecting still takes a tap on the page's button. The UP address and
@@ -248,7 +259,9 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     contract verified on LUKSO's Blockscout; contacts for sends, with the address-poisoning warning; the
     site relayer checked before a request is prepared; the "never accept an EIP-7702 upgrade on the
     admin controller" note);
-  - **0.9.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
+  - **0.10.0** (minor, structural): the signing window (above), reviewed by two providers before its
+    release; the panel "This phone" links to the LUKSO authorization page on LUKSO;
+  - **0.10.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
      requires one for crypto wallets (registered business, D-U-N-S number, website verified; see
@@ -338,13 +351,9 @@ Improvements (changes to the page itself are collected in Cross_Chain's
 - A dApp on a chain other than the one chosen in the page (OpenSea's cross-chain checkout) is refused
   by design: one UP, one network per session. Since 0.8.1 a switch request is refused with 4001 and the
   dApp is told the session's network, and the log says which network to choose in the dApp.
-- **Next, structural: a signing window as in the browser extension** (decided 2026-10-30). Today the page
-  and the phone key share one WebView, and the `PhoneKey` plugin signs the digest the page's JavaScript
-  computes, with the prompt's text the page writes. The app gets the extension's three layers: the page's
-  request window, then a separate signing screen (its own Activity and WebView, no dApp, no WalletConnect,
-  no network) that computes what is signed from the request itself and shows it, sharing the extension's
-  signing logic, then the fingerprint; the native plugin signs only for that screen. Reviewed by two
-  providers before its release (Cross_Chain's `WALLET-BACKLOG.md`, item 6; `AUDIT.md`, review policy).
+- **Done in 0.10.0, structural: the signing window as in the browser extension** (decided 2026-10-30):
+  the page's request window, then the separate signing window (its own Activity and WebView), then the
+  fingerprint. Reviewed by two providers before its release (Cross_Chain's `AUDIT.md`, review policy).
 - Later: the phone key signing inside the Keystore itself (P-256: the Keystore cannot use Ethereum's
   curve, so today the key is decrypted in the app for each signature). It needs a contract on the UP that
   checks such signatures and a professional audit: Cross_Chain's roadmap, step 8.

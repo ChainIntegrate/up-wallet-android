@@ -6,6 +6,9 @@
 //   - app/app-shim.js and app/app.css are loaded by the page (links and relay calls to the site, phone layout);
 //   - app/phone-key.js, bundled with esbuild, gives the page the phone key as its signing wallet (0.9.0);
 //   - app/native.js, bundled too: paste button, wc: links received from other apps, remembered UP and network;
+//   - app/signer/ (0.10.0), the signing window, built apart into android/app/src/main/assets/signer/ (not in
+//     www/: the wallet page cannot load it), for SignerActivity's own WebView; its sign-plan.js is the browser
+//     extension's (test/signer.js checks the copy);
 //   - the WalletConnect metadata names the site instead of the app's origin (https://upwallet.chainintegrate.it);
 //   - the page's Content-Security-Policy hashes are computed again for the changed inline script (ethers is local).
 //
@@ -124,6 +127,16 @@ async function main() {
   fs.copyFileSync(path.join(ROOT, "app", "diag.js"), path.join(OUT, "app", "diag.js"));
   for (const name of ["phone-key.js", "native.js"]) await require("esbuild").build({
     entryPoints: [path.join(ROOT, "app", name)], outfile: path.join(OUT, "app", name),
+    bundle: true, format: "iife", platform: "browser", target: "es2020", minify: true, legalComments: "none", logLevel: "warning",
+    define: { "process.env.NODE_ENV": '"production"', global: "globalThis" },
+  });
+  // The signing window: its own folder of the app's assets, outside www/ (SignerActivity serves only this one).
+  const SIGNER = path.join(ROOT, "android", "app", "src", "main", "assets", "signer");
+  fs.rmSync(SIGNER, { recursive: true, force: true });
+  fs.mkdirSync(SIGNER, { recursive: true });
+  fs.copyFileSync(path.join(ROOT, "app", "signer", "signer.html"), path.join(SIGNER, "signer.html"));
+  await require("esbuild").build({
+    entryPoints: [path.join(ROOT, "app", "signer", "signer.js")], outfile: path.join(SIGNER, "signer.js"),
     bundle: true, format: "iife", platform: "browser", target: "es2020", minify: true, legalComments: "none", logLevel: "warning",
     define: { "process.env.NODE_ENV": '"production"', global: "globalThis" },
   });

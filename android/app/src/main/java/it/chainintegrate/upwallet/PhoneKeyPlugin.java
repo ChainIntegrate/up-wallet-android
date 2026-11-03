@@ -38,19 +38,23 @@ import javax.crypto.spec.GCMParameterSpec;
  * The secp256k1 private key is created here and stored only encrypted, with an AES-256-GCM key of the
  * Android Keystore (StrongBox when the phone has it). That AES key can be used only right after the
  * user's fingerprint, face or (Android 11+) PIN, once per use: every signature asks for it. The private
- * key is decrypted in this process only for the signature, then wiped; it never reaches the web page,
- * which sends a 32-byte digest and gets the signature back. App data is not backed up
+ * key is decrypted in this process only for the signature, then wiped; it never reaches a web page.
+ * From 0.10.0 the wallet page cannot have a digest signed: it sends a structured request, which opens
+ * the signing window (SignerActivity, its own WebView with only the app's signing code), where what is
+ * signed is computed again, shown, and signed after the fingerprint. App data is not backed up
  * (allowBackup="false"), so there is no copy anywhere: a lost phone or an uninstalled app is handled by
  * revoking the key's address from another controller of the UP.
  *
  *   status()                          → { exists, address, hardware, canAuth }
  *   create({ title, subtitle })       → { address }        (asks for the fingerprint)
- *   sign({ digest, title, subtitle })  → { signature }      (r + s + v, 0x hex; asks for the fingerprint)
+ *   request({ request, lang })        → { result }         (the signing window's answer, JSON: a signature
+ *                                                          or a signed transaction; asks for the fingerprint)
  *   remove()                          → {}
  *
  * Errors: code "CANCELED" (the user closed the prompt), "NO_AUTH" (no fingerprint or screen lock set
  * up), "INVALIDATED" (Android dropped the AES key, e.g. the screen lock was removed: the phone key is
- * lost), "NO_KEY", "EXISTS", "BUSY", "FAILED".
+ * lost), "NO_KEY", "EXISTS", "BUSY", "FAILED"; from request(), also the signing window's refusals as an
+ * EIP-1193 code in a string ("4001" rejected, "4100" refused, "-32602" malformed).
  */
 @CapacitorPlugin(name = "PhoneKey")
 public class PhoneKeyPlugin extends Plugin {
@@ -59,9 +63,10 @@ public class PhoneKeyPlugin extends Plugin {
     private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
     private boolean busy = false;
 
-    private SharedPreferences prefs() { return getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
+    private SharedPreferences prefs() { return prefs(getContext()); }
+    static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
 
-    private static int authenticators() {
+    static int authenticators() {
         return Build.VERSION.SDK_INT >= 30
             ? BiometricManager.Authenticators.BIOMETRIC_STRONG | BiometricManager.Authenticators.DEVICE_CREDENTIAL
             : BiometricManager.Authenticators.BIOMETRIC_STRONG;
@@ -108,35 +113,17 @@ public class PhoneKeyPlugin extends Plugin {
         });
     }
 
+    // A request for the signing window: it opens over the app, shows what is signed and answers this call.
+    // One at a time. The page gives the request only; the key's address is read there from the app's storage.
     @PluginMethod
-    public void sign(PluginCall call) {
-        SharedPreferences p = prefs();
-        if (!p.contains("ct") || !keyExists()) { call.reject("no phone key", "NO_KEY"); return; }
-        byte[] digest = hex(call.getString("digest", ""));
-        if (digest == null || digest.length != 32) { call.reject("digest must be 32 bytes", "FAILED"); return; }
-        Cipher cipher;
-        try {
-            KeyStore ks = KeyStore.getInstance(ANDROID_KEYSTORE);
-            ks.load(null);
-            SecretKey k = (SecretKey) ks.getKey(ALIAS, null);
-            cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, k, new GCMParameterSpec(128, Base64.decode(p.getString("iv", ""), Base64.NO_WRAP)));
-        } catch (KeyPermanentlyInvalidatedException e) {
-            call.reject("the phone key can no longer be unlocked (the screen lock changed): create a new one and revoke the old one", "INVALIDATED"); return;
-        } catch (Exception e) { call.reject("cannot open the key: " + e.getMessage(), "FAILED"); return; }
-        final String expected = p.getString("address", "");
-        final byte[] ct = Base64.decode(p.getString("ct", ""), Base64.NO_WRAP);
-        authenticate(call, cipher, (c) -> {
-            byte[] priv = c.doFinal(ct);
-            try {
-                byte[] sig = Secp256k1.sign(priv, digest);
-                // The signature must recover to the stored address: a wrong key never leaves this method.
-                if (!expected.equals(Secp256k1.recoverAddress(digest, sig))) { call.reject("signature check failed", "FAILED"); return; }
-                JSObject ret = new JSObject();
-                ret.put("signature", toHex(sig));
-                call.resolve(ret);
-            } finally { Arrays.fill(priv, (byte) 0); }
-        });
+    public void request(PluginCall call) {
+        if (!prefs().contains("ct") || !keyExists()) { call.reject("no phone key", "NO_KEY"); return; }
+        String req = call.getString("request", "");
+        if (req == null || req.isEmpty() || req.length() > 256 * 1024) { call.reject("no request", "-32602"); return; }
+        String lang = "it".equals(call.getString("lang", "en")) ? "it" : "en";
+        if (!SignerActivity.offer(new SignerActivity.Pending(call, req, lang))) { call.reject("another signature is waiting", "BUSY"); return; }
+        if (getActivity() == null) { SignerActivity.drop(); call.reject("no activity", "FAILED"); return; }
+        getActivity().startActivity(new android.content.Intent(getContext(), SignerActivity.class));
     }
 
     @PluginMethod
@@ -194,7 +181,7 @@ public class PhoneKeyPlugin extends Plugin {
         });
     }
 
-    private boolean keyExists() {
+    static boolean keyExists() {
         try { KeyStore ks = KeyStore.getInstance(ANDROID_KEYSTORE); ks.load(null); return ks.containsAlias(ALIAS); }
         catch (Exception e) { return false; }
     }
@@ -246,7 +233,17 @@ public class PhoneKeyPlugin extends Plugin {
 
     private static String clip(String s, int n) { return s == null ? "" : s.length() > n ? s.substring(0, n) : s; }
 
-    private static byte[] hex(String h) {
+    // The cipher that decrypts the stored key, bound to the next fingerprint prompt.
+    static Cipher decryptCipher(Context c) throws Exception {
+        KeyStore ks = KeyStore.getInstance(ANDROID_KEYSTORE);
+        ks.load(null);
+        SecretKey k = (SecretKey) ks.getKey(ALIAS, null);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, k, new GCMParameterSpec(128, Base64.decode(prefs(c).getString("iv", ""), Base64.NO_WRAP)));
+        return cipher;
+    }
+
+    static byte[] hex(String h) {
         if (h == null) return null;
         if (h.startsWith("0x") || h.startsWith("0X")) h = h.substring(2);
         if (h.length() % 2 != 0 || !h.matches("[0-9a-fA-F]*")) return null;
@@ -254,7 +251,7 @@ public class PhoneKeyPlugin extends Plugin {
         for (int i = 0; i < b.length; i++) b[i] = (byte) Integer.parseInt(h.substring(2 * i, 2 * i + 2), 16);
         return b;
     }
-    private static String toHex(byte[] b) {
+    static String toHex(byte[] b) {
         StringBuilder sb = new StringBuilder("0x");
         for (byte x : b) sb.append(String.format("%02x", x & 0xff));
         return sb.toString();

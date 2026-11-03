@@ -2,3 +2,6 @@ node_modules/
 www/
 upstream/
 *.apk
+
+# The signing window, built by scripts/build-web.js from app/signer/
+android/app/src/main/assets/signer/

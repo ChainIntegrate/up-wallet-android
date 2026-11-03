@@ -7,8 +7,8 @@ android {
         applicationId "it.chainintegrate.upwallet"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 54
-        versionName "0.9.8"
+        versionCode 55
+        versionName "0.10.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -66,6 +66,8 @@ dependencies {
     // The phone key (PhoneKeyPlugin): the fingerprint prompt bound to a Keystore key, and secp256k1 with
     // Keccak-256 for Ethereum signatures (Secp256k1.java; Android's own Bouncy Castle is not public API).
     implementation "androidx.biometric:biometric:1.1.0"
+    // The signing window's WebView serves only the app's own files (WebViewAssetLoader, SignerActivity).
+    implementation "androidx.webkit:webkit:$androidxWebkitVersion"
     implementation "org.bouncycastle:bcprov-jdk18on:1.78.1"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
