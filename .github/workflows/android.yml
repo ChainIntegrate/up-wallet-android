@@ -121,7 +121,7 @@ jobs:
             echo
             echo "Signed with the release key, certificate SHA-256 \`$fp\`."
             echo
-            echo "Install: open the .apk on the phone and allow installing from that source. You need MetaMask mobile with your Universal Profile's controller account in it."
+            echo "Install: open the .apk on the phone and allow installing from that source. The app creates its own phone key; authorize it once on your Universal Profile (on LUKSO with LUKSO's own wallet, on the other networks from the site's Backup page), as the README says: https://github.com/ChainIntegrate/up-wallet-android#readme"
             echo
             echo "Privacy policy: https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html"
           } > notes.md
