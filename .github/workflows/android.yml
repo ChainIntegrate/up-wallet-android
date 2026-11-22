@@ -126,6 +126,9 @@ jobs:
             echo "Privacy policy: https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html"
           } > notes.md
           gh release upload "$GITHUB_REF_NAME" "up-wallet-$GITHUB_REF_NAME.apk" --clobber
+          # The same file under a fixed name: .../releases/latest/download/up-wallet.apk never changes.
+          cp "up-wallet-$GITHUB_REF_NAME.apk" "$RUNNER_TEMP/up-wallet.apk"
+          gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/up-wallet.apk" --clobber
           gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
 
       - uses: actions/upload-artifact@v4
