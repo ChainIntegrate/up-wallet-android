@@ -46,6 +46,8 @@ function main() {
   try { p = plan(req, msg.address, lang); } catch (e) { reject(e && e.code ? e.code : -32602, e && e.message ? e.message : String(e)); return; }
   $("title").textContent = p.title;
   if (p.site) $("site").textContent = L(`Richiesta da: ${p.site}`, `Requested by: ${p.site}`);
+  // The warnings first, where they cannot be missed (EXT-02, EXT-03).
+  for (const w of p.warnings || []) $("rows").appendChild(el("div", "⚠️ " + w, "warn"));
   for (const [label, value] of p.rows) { const r = el("div", undefined, "row"); r.append(el("div", label, "label"), el("div", value, "value")); $("rows").appendChild(r); }
   $("account").textContent = L(`Chiave del telefono: ${ethers.getAddress(msg.address)}`, `Phone key: ${ethers.getAddress(msg.address)}`);
   $("sign").textContent = L("Firma", "Sign");

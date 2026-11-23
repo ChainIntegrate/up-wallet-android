@@ -271,6 +271,33 @@ const UP = "0x4a2605796e0d91A9667d6E30365aEEC384C48c27";
     && notice.privacy === "https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html", JSON.stringify(notice));
   ck("no page errors", !errs.length, errs.join("\n"));
 
+  // ---- a new version announced (WALLET-BACKLOG item 14): the site's relay service, through the app's HTTP
+  {
+    const ann = async (answer) => {
+      const q = await ctx.newPage(); q.on("pageerror", (e) => errs.push(e.message));
+      await q.goto("https://localhost/up-wallet.html");
+      await q.waitForFunction(() => typeof window.__upwalletCheckUpdate === "function");
+      await q.evaluate((a) => { window.__upwalletHttp = async (o) => (/relay\/versions$/.test(o.url) ? { status: 200, data: JSON.stringify(a), headers: { "content-type": "application/json" } } : { status: 404, data: "" }); }, answer);
+      await q.evaluate(() => window.__upwalletCheckUpdate("0.10.0"));
+      const out = await q.evaluate(() => { const b = document.getElementById("appUpdate"); return b ? { text: b.innerText, links: [...b.querySelectorAll("a")].map((a) => a.href) } : null; });
+      return { q, out };
+    };
+    const OWN = "https://github.com/ChainIntegrate/up-wallet-android/releases/";
+    let a = await ann({ app: { version: "0.10.1", download: OWN + "download/v0.10.1/up-wallet.apk", notes: OWN + "tag/v0.10.1" } });
+    ck("a newer app: announced at the top, install over this one (the key stays), its own release links", a.out && /È disponibile UP Wallet 0\.10\.1/.test(a.out.text) && /questa è la 0\.10\.0/.test(a.out.text) && /la chiave del telefono resta/.test(a.out.text) && a.out.links[0] === OWN + "download/v0.10.1/up-wallet.apk" && a.out.links[1] === OWN + "tag/v0.10.1", JSON.stringify(a.out));
+    await a.q.evaluate(() => [...document.querySelectorAll("#appUpdate button")].find((x) => /Più tardi/.test(x.textContent)).click());
+    await a.q.close();
+    a = await ann({ app: { version: "0.10.1", download: OWN + "x", notes: OWN + "y" } });
+    ck("\"Later\": not announced again for three days", a.out === null, JSON.stringify(a.out));
+    await a.q.close();
+    a = await ann({ app: { version: "0.10.2", download: "https://evil.example/up.apk", notes: "https://evil.example/n" } });
+    ck("a link that is not one of the app's own releases: not shown (the announcement only)", a.out && /0\.10\.2/.test(a.out.text) && a.out.links.length === 0, JSON.stringify(a.out));
+    await a.q.close();
+    a = await ann({ app: { version: "0.10.0", download: OWN + "x", notes: OWN + "y" } });
+    ck("the same version: nothing announced", a.out === null, JSON.stringify(a.out));
+    await a.q.close();
+  }
+
   await b.close();
   console.log(res.join("\n"));
   console.log(`${res.filter((r) => r.startsWith("PASS")).length}/${res.length}`);

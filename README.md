@@ -4,7 +4,7 @@ The UP Wallet page of [Cross_Chain](https://github.com/ChainIntegrate/Cross_Chai
 built with Capacitor. The page is bundled in the app, taken from Cross_Chain at the commit in
 `UPSTREAM.json`; the app adds only what a phone needs (`app/`).
 
-Status: **prototype (0.9.x)**. Since 0.9.0 the app is the wallet: it signs with a key kept on the
+Status: **prototype (0.10.x)**. Since 0.9.0 the app is the wallet: it signs with a key kept on the
 phone (section "The phone key"); up to 0.8.x it signed through MetaMask mobile. Tested on an Android
 phone (ColorOS) with OpenSea, Uniswap and hup.social on Base, Arc and LUKSO: the app installs, shows the
 page, connects to dApps through WalletConnect links (pasted, opened with the app, shared to it or
@@ -83,6 +83,16 @@ How it works:
   the typed data's domain and content, the transaction's network, recipient, value, function and maximum
   gas, and for a transaction to the UP's Key Manager (`execute(bytes)`) what the UP does inside (each
   call's recipient, value and function), as for a gas-relay operation. "Sign", then the fingerprint.
+  From 0.10.1 (review of 2026-11-04, AND-01 and AND-02): typed data shown and checked by the type that is
+  signed (a declared `primaryType` that differs is refused; only the signed fields shown), the token calls'
+  arguments (transfers and approvals of ERC-20, LSP7, ERC-721, LSP8, ERC-1155, Permit2: recipient, spender,
+  amount, "unlimited" flagged), every call of a batch, and warnings first (permits, signed transfers,
+  orders, approvals, a function the window does not know, a DELEGATECALL).
+- **A new version announced** (from 0.10.1; Cross_Chain `WALLET-BACKLOG.md` item 14): at start the app asks
+  the site's relay service which is the latest full release (`relay/versions`, which reads GitHub; the app
+  never calls GitHub) and, when it is newer, says so at the top, with how to update (install the new APK
+  over this one: the key stays) and the download link, only if it is a file of this app's own releases.
+  "Later" hides it for three days.
 - **One key per device, by choice.** No export, import, backup or sync of the key, not even encrypted: a
   new phone (or computer, with the browser extension) gets its own key and one "Authorize a device". Each
   device is a controller of its own, revoked alone if lost; a key that never leaves its device cannot be

@@ -14,6 +14,11 @@
 // - Once the dApp has its answer (signature sent, operation done, simulation, rejection, session
 //   active), a "Back to the dApp" button brings the default browser back to the front, on the tab it
 //   was showing (or, without a default browser, puts UP Wallet in the background).
+// - A new version announced (WALLET-BACKLOG item 14), as the browser extension does: at start, the site's relay
+//   service says which is the latest full release (relay/versions, which reads GitHub; the app never does) and,
+//   when it is newer, a box at the top says so, with how to update (install the new APK over this one: the key
+//   stays) and the download link, only if it is a file or page of this app's own releases. "Later" hides it
+//   for three days. Nothing downloaded or installed by itself, nothing about the user sent.
 // - While a dApp is connected the app stays running (a foreground service with an ongoing notification):
 //   otherwise Android freezes it after a few minutes in the background and requests wait for the user.
 // Bundled by scripts/build-web.js (esbuild) into www/app/native.js.
@@ -331,9 +336,51 @@ function watchPage() {
   if (native()) App.getInfo().then((info) => {
     window.__upwalletAppVersion = info.version;
     window.dispatchEvent(new Event("upwallet:version"));
+    checkUpdate(info.version);
   }).catch(() => null);
   if (native()) LocalNotifications.createChannel({ id: "requests", name: N.channel(), importance: 5, visibility: 1, vibration: true }).catch(() => null);
 }
+
+// ---- a new version (WALLET-BACKLOG item 14)
+const OWN_RELEASES = "https://github.com/ChainIntegrate/up-wallet-android/releases/";
+const LATER = "upwallet.update.later";
+const newer = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+async function checkUpdate(mine) {
+  if (!/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(mine || "") || $("appUpdate")) return;
+  let v = null;
+  try { const r = await window.fetch("relay/versions", { cache: "no-store" }); v = r.ok ? (await r.json()).app : null; } catch (e) { return; }
+  if (!v || !/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(v.version || "") || !newer(v.version, mine)) return;
+  let later = "";
+  try { later = localStorage.getItem(LATER) || ""; } catch (e) { /* none */ }
+  const [laterV, laterAt] = later.split("|");
+  if (laterV === v.version && Date.now() - Number(laterAt) < 3 * 86400000) return;
+  const own = (u) => typeof u === "string" && u.startsWith(OWN_RELEASES) && !/[\s"'<>]/.test(u);
+  const box = document.createElement("div");
+  box.id = "appUpdate"; box.className = "setup-banner";
+  box.style.cssText = "display:block;";
+  const fill = () => {
+    box.textContent = "";
+    const head = document.createElement("div");
+    const b = document.createElement("b");
+    b.textContent = en() ? `UP Wallet ${v.version} is available` : `È disponibile UP Wallet ${v.version}`;
+    head.append(b, document.createTextNode(en() ? ` (this is ${mine}). Install the new APK over this one: the phone key stays. Never uninstall the app first: its key would be lost.` : ` (questa è la ${mine}). Installa il nuovo APK sopra questo: la chiave del telefono resta. Non disinstallare mai l'app prima: la chiave si perderebbe.`));
+    box.appendChild(head);
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:6px;";
+    if (own(v.download)) { const a = document.createElement("a"); a.href = v.download; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = en() ? "Download the APK" : "Scarica l'APK"; row.appendChild(a); }
+    if (own(v.notes)) { const a = document.createElement("a"); a.href = v.notes; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = en() ? "What changes" : "Cosa cambia"; row.appendChild(a); }
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "secondary small"; btn.textContent = en() ? "Later" : "Più tardi";
+    btn.addEventListener("click", () => { try { localStorage.setItem(LATER, `${v.version}|${Date.now()}`); } catch (e) { /* shown again */ } box.remove(); });
+    row.appendChild(btn);
+    box.appendChild(row);
+  };
+  fill();
+  new MutationObserver(fill).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+  const nav = $("nav");
+  if (nav) nav.parentNode.insertBefore(box, nav); else document.body.prepend(box);
+}
+window.__upwalletCheckUpdate = checkUpdate;   // for the tests (the version comes from Android on the phone)
 
 // Under the page's footer: the app's third-party notices and its privacy policy (the page's own footer
 // already carries Reown's notice for WalletConnect).

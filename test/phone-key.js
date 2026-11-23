@@ -143,7 +143,7 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   ck("eth_sendTransaction: a signed EIP-1559 transaction for Base, from the phone key, with the page's fields and the RPC's nonce, sent raw",
     raws.length === 1 && t.from === sig.addr && t.chainId === 8453n && t.to === ethers.getAddress(TO) && t.value === 10n ** 16n && t.data === "0x1234" && t.gasLimit === 40000n && t.nonce === 7 && t.type === 2 && tx.hash === ethers.keccak256(raws[0]), JSON.stringify({ raw: raws[0], from: raws[0] && t.from }));
   ck("the window names the network, the recipient and the value", tx.prompt[1] === "Transazione su Base" && row(tx.prompt[3], "Verso") === ethers.getAddress(TO) && row(tx.prompt[3], "Valore") === "0.01 ETH" && row(tx.prompt[3], "Rete") === "Base (8453)", JSON.stringify(tx.prompt));
-  ck("PK-4: and the function it calls", row(tx.prompt[3], "Funzione") === "0x1234", JSON.stringify(tx.prompt[3]));
+  ck("PK-4: and the function it calls (one the window does not know, said so: EXT-03)", row(tx.prompt[3], "Funzione") === "0x1234: SCONOSCIUTA a questa finestra", JSON.stringify(tx.prompt[3]));
   // a transaction to the UP's Key Manager: the prompt says what the UP does inside execute(bytes)
   const kmDesc = await p.evaluate(async (TO) => {
     const up = new ethers.Interface(["function execute(uint256,address,uint256,bytes)"]).encodeFunctionData("execute", [0, TO, 10n ** 16n, "0x12345678"]);
@@ -187,7 +187,7 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   }, [ser(op), H]);
   ck("PK-2: the gas relay has the phone key sign the operation (upwallet_signUserOperation): the signature is the personal_sign of the hash the page computed",
     ethers.isHexString(relay.sig, 65) && ethers.verifyMessage(ethers.getBytes(H), relay.sig) === sig.addr && relay.logs.some((m) => /firmato/i.test(m)), JSON.stringify(relay));
-  ck("PK-4: its window says the operation, the UP, the recipient, the value, the function and who pays the gas", relay.subtitle === "Operazione della UP su Base" && row(relay.desc, "UP") === UP && row(relay.desc, "Verso") === ethers.getAddress(TO) && row(relay.desc, "Valore") === "0.01 ETH" && row(relay.desc, "Funzione") === "0x12345678" && /pagato dal sito/.test(row(relay.desc, "Gas")), JSON.stringify([relay.subtitle, relay.desc]));
+  ck("PK-4: its window says the operation, the UP, the recipient, the value, the function and who pays the gas", relay.subtitle === "Operazione della UP su Base" && row(relay.desc, "UP") === UP && row(relay.desc, "Verso") === ethers.getAddress(TO) && row(relay.desc, "Valore") === "0.01 ETH" && row(relay.desc, "Funzione") === "0x12345678: SCONOSCIUTA a questa finestra" && /pagato dal sito/.test(row(relay.desc, "Gas")), JSON.stringify([relay.subtitle, relay.desc]));
   const opRefusals = await p.evaluate(async ([o]) => {
     const call = async (x) => { const n = window.__pk.prompts.length; try { await signerProvider.request({ method: "upwallet_signUserOperation", params: [x] }); return "signed"; } catch (e) { return [e.code, window.__pk.prompts.length === n]; } };
     return {

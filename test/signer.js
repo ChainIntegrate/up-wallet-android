@@ -108,6 +108,32 @@ const view = (p) => p.evaluate(() => ({ title: document.getElementById("title").
     await p.close();
   }
 
+  // EXT-02 / AND-01: typed data by the type that is signed; a permit warned first
+  {
+    const permit = JSON.stringify({ types: { EIP712Domain: [{ name: "name", type: "string" }, { name: "chainId", type: "uint256" }], Permit: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }, { name: "value", type: "uint256" }] }, primaryType: "Permit", domain: { name: "Tok", chainId: 8453 }, message: { owner: wallet.address, spender: "0x" + "5e".repeat(20), value: "5" } });
+    const { p } = await open(b, { kind: "typed", account: wallet.address, data: permit, chainId: 8453 });
+    const warns = await p.evaluate(() => [...document.querySelectorAll("#rows .warn")].map((e) => e.textContent));
+    ck("AND-01: a permit: the window warns first (PERMESSO DI SPESA)", warns.length >= 1 && /^⚠️ PERMESSO DI SPESA/.test(warns[0]), JSON.stringify(warns));
+    await p.close();
+    const lie = JSON.parse(permit); lie.primaryType = "Login";
+    const r = await open(b, { kind: "typed", account: wallet.address, data: JSON.stringify(lie), chainId: 8453 });
+    const c = await calls(r.p);
+    ck("AND-01: a declared primaryType that is not the one signed: refused at once (4100)", c.length === 1 && c[0][0] === "reject" && c[0][1] === "4100" && /Login/.test(c[0][2]), JSON.stringify(c));
+    await r.p.close();
+  }
+  // AND-02: an unlimited approval through the Key Manager: spender and "ILLIMITATO", warned
+  {
+    const km = new ethers.Interface(["function execute(bytes)"]), up = new ethers.Interface(["function execute(uint256,address,uint256,bytes)"]), erc20 = new ethers.Interface(["function approve(address,uint256)"]);
+    const SP = ethers.getAddress("0x" + "5e".repeat(20));
+    const data = km.encodeFunctionData("execute", [up.encodeFunctionData("execute", [0, "0x" + "77".repeat(20), 0, erc20.encodeFunctionData("approve", [SP, ethers.MaxUint256])])]);
+    const tx = { to: "0x" + "4b".repeat(20), value: "0", data, nonce: 1, gasLimit: "100000", chainId: 8453, type: 2, maxFeePerGas: "2", maxPriorityFeePerGas: "1" };
+    const { p } = await open(b, { kind: "tx", tx, net: { name: "Base", currency: "ETH" } });
+    const v = await view(p);
+    const warns = await p.evaluate(() => [...document.querySelectorAll("#rows .warn")].map((e) => e.textContent));
+    ck("AND-02: an unlimited approval: the spender, \"ILLIMITATO\" and a warning", v.rows.some((r) => r[1].includes(`Autorizza ${SP} a spendere ILLIMITATO`)) && warns.some((w) => /ILLIMITATA/.test(w)), JSON.stringify({ rows: v.rows, warns }));
+    await p.close();
+  }
+
   // a transaction: the signed transaction is the answer
   {
     const tx = { to: "0x" + "77".repeat(20), value: "10000000000000000", data: "0x", nonce: 7, gasLimit: "21000", chainId: 8453, type: 2, maxFeePerGas: "2000000000", maxPriorityFeePerGas: "1000000" };
