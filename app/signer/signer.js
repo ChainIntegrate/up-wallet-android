@@ -47,6 +47,9 @@ function main() {
   $("title").textContent = p.title;
   if (p.site) $("site").textContent = L(`Richiesta da: ${p.site}`, `Requested by: ${p.site}`);
   // The warnings first, where they cannot be missed (EXT-02, EXT-03).
+  // Red first: what can hand over the UP (a DELEGATECALL, its owner, its controllers) or a description that
+  // does not match the data; then the warnings.
+  for (const w of p.danger || []) $("rows").appendChild(el("div", "⛔ " + w, "alert"));
   for (const w of p.warnings || []) $("rows").appendChild(el("div", "⚠️ " + w, "warn"));
   for (const [label, value] of p.rows) { const r = el("div", undefined, "row"); r.append(el("div", label, "label"), el("div", value, "value")); $("rows").appendChild(r); }
   $("account").textContent = L(`Chiave del telefono: ${ethers.getAddress(msg.address)}`, `Phone key: ${ethers.getAddress(msg.address)}`);

@@ -238,7 +238,7 @@ To take a newer version of the page, change the commit in `UPSTREAM.json`.
 `versionName` is `major.minor.patch`; `versionCode` (in `android/app/build.gradle`) goes up by 1 with
 every published build, whatever the name. The release tag is `v<versionName>`.
 
-- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.10.2.
+- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.10.3.
 - **patch** (0.8.0 → 0.8.1): fixes and small additions, and a page update from Cross_Chain.
 - **minor** for the intermediate milestones:
   - **0.8.0** (done): call decoding from any verified contract's ABI (Base, Arbitrum One, Arc), contracts
@@ -276,6 +276,10 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     arguments of the UP's calls in the signing window); a new release announced in the app; from it, the
     releases are full GitHub releases;
   - **0.10.2** (patch): page 0.14.2 (Alchemy's token list kept when only its NFT API refuses);
+  - **0.10.3** (patch): page 0.14.4; the signing window shows by name and arguments the calls the page
+    knows (their signature checked against the data in the window), with a warning only for a permission,
+    an address that is not the UP, extra bytes or a call neither side decodes, and red alerts for a
+    description that does not match, a DELEGATECALL, a change of the UP's owner or controllers;
   - **0.10.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google

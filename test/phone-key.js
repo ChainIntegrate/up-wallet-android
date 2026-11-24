@@ -78,7 +78,7 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
         let pl;
         try { pl = window.UpwSignPlan.plan(JSON.parse(o.request), window.__pk.wallet.address, o.lang); }
         catch (e) { throw Object.assign(new Error(e.message), { code: String(e.code) }); }
-        window.__pk.prompts.push(["sign", pl.title, pl.digest, pl.rows, o.lang]);
+        window.__pk.prompts.push(["sign", pl.title, pl.digest, pl.rows, o.lang, pl.warnings, pl.danger || []]);
         if (window.__pk.cancel) throw Object.assign(new Error("User rejected the request."), { code: "4001" });
         return { result: JSON.stringify(pl.finish(ethers.Signature.from(window.__pk.wallet.signingKey.sign(pl.digest).serialized))) };
       },
@@ -143,7 +143,7 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   ck("eth_sendTransaction: a signed EIP-1559 transaction for Base, from the phone key, with the page's fields and the RPC's nonce, sent raw",
     raws.length === 1 && t.from === sig.addr && t.chainId === 8453n && t.to === ethers.getAddress(TO) && t.value === 10n ** 16n && t.data === "0x1234" && t.gasLimit === 40000n && t.nonce === 7 && t.type === 2 && tx.hash === ethers.keccak256(raws[0]), JSON.stringify({ raw: raws[0], from: raws[0] && t.from }));
   ck("the window names the network, the recipient and the value", tx.prompt[1] === "Transazione su Base" && row(tx.prompt[3], "Verso") === ethers.getAddress(TO) && row(tx.prompt[3], "Valore") === "0.01 ETH" && row(tx.prompt[3], "Rete") === "Base (8453)", JSON.stringify(tx.prompt));
-  ck("PK-4: and the function it calls (one the window does not know, said so: EXT-03)", row(tx.prompt[3], "Funzione") === "0x1234: SCONOSCIUTA a questa finestra", JSON.stringify(tx.prompt[3]));
+  ck("PK-4: and the function it calls (one neither the window nor the page decodes, said so)", row(tx.prompt[3], "Funzione") === "0x1234: non decodificata", JSON.stringify(tx.prompt[3]));
   // a transaction to the UP's Key Manager: the prompt says what the UP does inside execute(bytes)
   const kmDesc = await p.evaluate(async (TO) => {
     const up = new ethers.Interface(["function execute(uint256,address,uint256,bytes)"]).encodeFunctionData("execute", [0, TO, 10n ** 16n, "0x12345678"]);
@@ -187,7 +187,16 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   }, [ser(op), H]);
   ck("PK-2: the gas relay has the phone key sign the operation (upwallet_signUserOperation): the signature is the personal_sign of the hash the page computed",
     ethers.isHexString(relay.sig, 65) && ethers.verifyMessage(ethers.getBytes(H), relay.sig) === sig.addr && relay.logs.some((m) => /firmato/i.test(m)), JSON.stringify(relay));
-  ck("PK-4: its window says the operation, the UP, the recipient, the value, the function and who pays the gas", relay.subtitle === "Operazione della UP su Base" && row(relay.desc, "UP") === UP && row(relay.desc, "Verso") === ethers.getAddress(TO) && row(relay.desc, "Valore") === "0.01 ETH" && row(relay.desc, "Funzione") === "0x12345678: SCONOSCIUTA a questa finestra" && /pagato dal sito/.test(row(relay.desc, "Gas")), JSON.stringify([relay.subtitle, relay.desc]));
+  ck("PK-4: its window says the operation, the UP, the recipient, the value, the function and who pays the gas", relay.subtitle === "Operazione della UP su Base" && row(relay.desc, "UP") === UP && row(relay.desc, "Verso") === ethers.getAddress(TO) && row(relay.desc, "Valore") === "0.01 ETH" && row(relay.desc, "Funzione") === "0x12345678: non decodificata" && /pagato dal sito/.test(row(relay.desc, "Gas")), JSON.stringify([relay.subtitle, relay.desc]));
+  // page 0.14.4 / app 0.10.3: a call the window does not decode by itself, described from the page's signature
+  const vaultIface = new ethers.Interface(["function deposit(uint256 assets, address receiver)"]);
+  const hinted = await p.evaluate(async ([o]) => {
+    try { await signerProvider.request({ method: "upwallet_signUserOperation", params: [{ op: o, entryPoint: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789", chainId: 8453 }] }); } catch (e) { /* the mock may refuse */ }
+    const pr = window.__pk.prompts.at(-1);
+    return { desc: pr[3], warn: pr[5], danger: pr[6] };
+  }, [ser({ ...op, nonce: 4n, callData: upIface.encodeFunctionData("execute", [0, TO, 0, vaultIface.encodeFunctionData("deposit", [5000n, UP])]) })]);
+  ck("signature hints: the page's signature, checked in the window: the function by name and its arguments, no warning",
+    row(hinted.desc, "Funzione") === "deposit (nome dal wallet, verificato sui dati)" && String(row(hinted.desc, "Argomenti")).includes(`receiver: ${UP} (la UP)`) && hinted.warn.length === 0 && hinted.danger.length === 0, JSON.stringify(hinted));
   const opRefusals = await p.evaluate(async ([o]) => {
     const call = async (x) => { const n = window.__pk.prompts.length; try { await signerProvider.request({ method: "upwallet_signUserOperation", params: [x] }); return "signed"; } catch (e) { return [e.code, window.__pk.prompts.length === n]; } };
     return {

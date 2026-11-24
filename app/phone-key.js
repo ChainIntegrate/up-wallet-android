@@ -213,7 +213,7 @@ async function signUserOperation(params) {
   const up = upEl && ethers.isAddress(upEl.value.trim()) ? ethers.getAddress(upEl.value.trim()) : null;
   if (!up || op.sender !== up) throw rpcError(4100, T.badOp("not the UP chosen in the page"));
   const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
-  return ask({ kind: "userop", op: str(op), entryPoint, chainId: net.chainId, up, net: { name: net.name, currency: net.currency || "" } });
+  return ask(await withHints({ kind: "userop", op: str(op), entryPoint, chainId: net.chainId, up, net: { name: net.name, currency: net.currency || "" } }));
 }
 async function signTyped(params) {
   const [a, data] = params || [];
@@ -221,6 +221,17 @@ async function signTyped(params) {
   const n = await currentNet();
   return ask({ kind: "typed", account: a, data: typeof data === "string" ? data : JSON.stringify(data), chainId: n ? n.chainId : null, site: site() });
 }
+// The function signatures the wallet page knows for the calls of a request (up-wallet.html): the signing
+// window checks each against the data before it shows the call by name and arguments (sign-plan.js).
+async function withHints(req) {
+  try {
+    const f = window.__upwalletSignatureHints;
+    if (typeof f !== "function") return req;
+    const h = await Promise.race([f(req), new Promise((r) => setTimeout(() => r(null), 6000))]);
+    return h && typeof h === "object" ? { ...req, hints: h } : req;
+  } catch (e) { return req; }
+}
+const pageUp = () => { const el = $("upAddress"); return el && ethers.isAddress(el.value.trim()) ? ethers.getAddress(el.value.trim()) : null; };
 const big = (v) => (v === undefined || v === null || v === "" ? null : BigInt(v));
 async function sendTransaction(params) {
   const tx = (params || [])[0] || {};
@@ -241,7 +252,7 @@ async function sendTransaction(params) {
   }
   const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
   // The signing window shows the transaction as signed (and, through the Key Manager, what the UP does).
-  const raw = await ask({ kind: "tx", tx: str({ ...base, nonce, gasLimit, chainId: net.chainId, ...fees }), net: { name: net.name, currency: net.currency || "" }, site: site() });
+  const raw = await ask(await withHints({ kind: "tx", tx: str({ ...base, nonce, gasLimit, chainId: net.chainId, ...fees }), up: pageUp(), net: { name: net.name, currency: net.currency || "" }, site: site() }));
   const t = ethers.Transaction.from(raw);
   if (ethers.getAddress(t.from) !== address || Number(t.chainId) !== net.chainId) throw rpcError(-32603, "signature check failed");
   return rpc.send("eth_sendRawTransaction", [raw]);
