@@ -54,7 +54,8 @@ How it works:
 - **A new key, created on the phone** the first time "Use the phone key" is pressed. It never leaves the phone: it is encrypted with
   the Android Keystore (the phone's secure hardware where there is one), used only after fingerprint or
   PIN, **for every signature**, and the signature is made in the app's native code, so the page never
-  sees the key. There is no seed phrase and no copy: app data is not backed up (`allowBackup="false"`),
+  sees the key. On phones without secure hardware the Keystore is software only: the panel "This phone"
+  says where the key is kept (StrongBox, the phone's secure hardware, or software). There is no seed phrase and no copy: app data is not backed up (`allowBackup="false"`),
   and uninstalling the app or losing the phone loses the key. That is handled by revoking it.
 - **Authorized once per network, from the site.** The app shows the key's address (copy, QR). On a
   computer, the site's **Backup** page, "Authorize a device", adds it as a controller of the UP on that
@@ -211,14 +212,14 @@ Connect).
 
 ## Build
 
-- **CI**: every push builds the APK (GitHub Actions, "Android APK"). Download it from the run's
-  artifacts (`up-wallet-apk`), unzip, and install the `.apk` on the phone (allow installing from this
-  source when Android asks); artifacts are kept 30 days and need a GitHub sign-in. The run's summary
-  says which key signed it: "Release key" with the certificate's SHA-256 fingerprint
-  (`c70a8909…154446`), or a "Debug key" warning.
+- **CI**: every push builds and tests a **debug APK** (GitHub Actions, "Android APK"; artifact
+  `up-wallet-apk-debug`, kept 30 days), signed with a throwaway key: it is for tests on a phone without
+  the app, and Android refuses it as an update of an installed release. Since 2026-11-24 the release key
+  is used only for a published release (AUDIT 2026-11-04 AND-04).
 - **Releases**: publish a release on GitHub (Releases -> Draft a new release) with a new tag
-  `v<versionName>` (for example `v0.7.3`) on `main`. CI builds the APK, attaches it to the release and
-  writes the signer's fingerprint in its notes. The tag must match `versionName` in
+  `v<versionName>` (for example `v0.7.3`) on `main`. CI runs the tests, then a separate job, in the
+  repository's `release` environment, builds the APK with the release key, attaches it to the release and
+  writes in its notes the signer's fingerprint (`c70a8909…154446`) and the APK's SHA-256. The tag must match `versionName` in
   `android/app/build.gradle`, and the release key must be available, or no APK is attached.
 - **Locally** (needs the Android SDK and JDK 21):
 
@@ -289,14 +290,21 @@ every published build, whatever the name. The release tag is `v<versionName>`.
 
 ## Signing
 
-The release key never enters the repository. CI reads it from two repository secrets,
+The release key never enters the repository. Only the release job reads it, from two secrets,
 `UPW_KEYSTORE_B64` (the PKCS#12 file in base64, key alias `upwallet`) and `UPW_KEYSTORE_PASSWORD`,
-writes it to a temporary file for the build and deletes it afterwards. Each APK it builds,
-`up-wallet-<commit>.apk`, is signed with that key and installs over the previous one.
+writes it to a temporary file for the build and deletes it afterwards. That job runs for a published
+release only, after the tests, in the `release` environment: the secrets can be moved there (Settings,
+Environments) and given protection rules (a required reviewer, the `main` branch only), so that no other
+workflow run can read them. The release APK, `up-wallet-v<version>.apk`, is signed with that key and
+installs over the previous one. The workflow is read-only otherwise, its actions are pinned by commit and
+the Gradle wrapper is checked against Gradle's published checksums.
 
-Without the secrets (pull requests from forks, local builds) the build makes a debug APK,
+Every other build (pushes, pull requests, local builds) makes a debug APK,
 `up-wallet-<commit>-debug.apk`, signed with a throwaway key: Android refuses it as an update of the
-installed app. Keep a copy of the release key offline: without it, no update of the installed app is
+installed app.
+
+**Builds of the first prototypes** (up to 0.6.3) were signed with an earlier key: they cannot be updated
+by a current release. Uninstall such a build first (it held no key and no data worth keeping). Keep a copy of the release key offline: without it, no update of the installed app is
 possible (users would have to uninstall and lose the app's data).
 
 ## Security reviews

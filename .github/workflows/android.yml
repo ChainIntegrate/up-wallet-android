@@ -8,22 +8,31 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Read-only by default (AUDIT 2026-11-04 AND-04). The release key is used only by the release job, which runs
+# for a published release in the "release" environment (its secrets and protection rules can be set in the
+# repository's settings, Environments); every other build makes a debug APK. Actions pinned by commit (the
+# v4 tag each one had when pinned, in the comment).
 permissions:
-  contents: write   # used only by the Release step, on tags
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      # The Gradle wrapper jar is the official one (a tampered wrapper would run code in the build).
+      - uses: gradle/actions/wrapper-validation@748248ddd2a24f49513d8f472f81c3a07d4d50e1   # v4.4.4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4.4.0
         with:
           node-version: 22
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3   # v4.9.1
         with:
           distribution: temurin
           java-version: 21
@@ -51,88 +60,120 @@ jobs:
       - name: Copy into the Android project
         run: npx cap sync android
 
-      # The release key comes from the repository's secrets (UPW_KEYSTORE_B64: the PKCS#12 file in
-      # base64; UPW_KEYSTORE_PASSWORD). Secrets are not given to pull requests from forks: there,
-      # and whenever they are missing, a debug APK is built with a throwaway key, named "-debug".
-      - name: Release key
-        env:
-          KEY_B64: ${{ secrets.UPW_KEYSTORE_B64 }}
-        run: |
-          if [ -n "$KEY_B64" ]; then
-            umask 077
-            printf '%s' "$KEY_B64" | base64 -d > "$RUNNER_TEMP/upwallet.p12"
-            echo "UPW_KEYSTORE_FILE=$RUNNER_TEMP/upwallet.p12" >> "$GITHUB_ENV"
-          else
-            echo "No release key in the secrets: building a debug APK."
-          fi
-
       # The phone key's signatures (Secp256k1.java) against vectors made with ethers.
       - name: Java unit tests
         working-directory: android
         timeout-minutes: 10
         run: ./gradlew testDebugUnitTest --no-daemon
 
-      - name: Build the APK
+      # A debug APK, signed with a throwaway key: it cannot update an installed release.
+      - name: Build the debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Name the APK after the commit
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "up-wallet-${GITHUB_SHA::7}-debug.apk"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        with:
+          name: up-wallet-apk-debug
+          path: up-wallet-*-debug.apk
+          retention-days: 30
+
+  # A release published on GitHub with the tag v<versionName> gets the APK, signed with the release key, and
+  # the signer's fingerprint in its notes. Only after the build job (tests included) has passed.
+  release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write   # to add the APK and the notes to the release
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@748248ddd2a24f49513d8f472f81c3a07d4d50e1   # v4.4.4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3   # v4.9.1
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Check the tag against versionName
+        run: |
+          version=$(grep -m1 'versionName' android/app/build.gradle | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then echo "::error::tag $GITHUB_REF_NAME does not match versionName $version"; exit 1; fi
+
+      - name: Install
+        run: npm ci
+
+      - name: Web content from Cross_Chain at the pinned commit
+        env:
+          ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
+        run: npm run web
+
+      - name: Copy into the Android project
+        run: npx cap sync android
+
+      # The release key from the secrets (UPW_KEYSTORE_B64: the PKCS#12 file in base64; UPW_KEYSTORE_PASSWORD).
+      - name: Release key
+        env:
+          KEY_B64: ${{ secrets.UPW_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEY_B64" ]; then echo "::error::no release key in the secrets: a debug APK is not published"; exit 1; fi
+          umask 077
+          printf '%s' "$KEY_B64" | base64 -d > "$RUNNER_TEMP/upwallet.p12"
+          echo "UPW_KEYSTORE_FILE=$RUNNER_TEMP/upwallet.p12" >> "$GITHUB_ENV"
+
+      - name: Build the release APK
         working-directory: android
         env:
           UPW_KEYSTORE_PASSWORD: ${{ secrets.UPW_KEYSTORE_PASSWORD }}
-        run: |
-          if [ -n "$UPW_KEYSTORE_FILE" ]; then ./gradlew assembleRelease --no-daemon
-          else ./gradlew assembleDebug --no-daemon; fi
-
-      - name: Name the APK after the commit
-        run: |
-          if [ -n "$UPW_KEYSTORE_FILE" ]; then cp android/app/build/outputs/apk/release/app-release.apk "up-wallet-${GITHUB_SHA::7}.apk"
-          else cp android/app/build/outputs/apk/debug/app-debug.apk "up-wallet-${GITHUB_SHA::7}-debug.apk"; fi
-
-      # Which key signed the APK, in the run's annotations: the release key's certificate fingerprint
-      # (public, the same in every release), or a warning for a debug APK.
-      - name: Signer of the APK
-        run: |
-          f=$(ls up-wallet-*.apk)
-          signer=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
-          certs=$("$signer" verify --print-certs "$f")
-          fp=$(echo "$certs" | grep -m1 'certificate SHA-256 digest' | sed 's/.*digest: //')
-          owner=$(echo "$certs" | grep -m1 'certificate DN' | sed 's/.*DN: //')
-          if [ -n "$UPW_KEYSTORE_FILE" ]; then echo "::notice title=Release key::$f signed by $owner, SHA-256 $fp"
-          else echo "::warning title=Debug key::$f signed by a throwaway debug key ($owner): it cannot update an installed release"; fi
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Remove the release key
         if: always()
         run: rm -f "$RUNNER_TEMP/upwallet.p12"
 
-      # A release published on GitHub with the tag v<versionName> gets the APK, signed with the release
-      # key, and the signer's fingerprint in its notes.
       - name: Release
-        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(grep -m1 'versionName' android/app/build.gradle | sed 's/.*"\(.*\)".*/\1/')
-          if [ "$GITHUB_REF_NAME" != "v$version" ]; then echo "::error::tag $GITHUB_REF_NAME does not match versionName $version"; exit 1; fi
-          if [ -z "$UPW_KEYSTORE_FILE" ]; then echo "::error::no release key: a debug APK is not published"; exit 1; fi
-          f=$(ls up-wallet-*.apk)
-          mv "$f" "up-wallet-$GITHUB_REF_NAME.apk"   # one file in the artifact too, named after the release
           f="up-wallet-$GITHUB_REF_NAME.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$f"
           signer=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
-          fp=$("$signer" verify --print-certs "$f" | grep -m1 'certificate SHA-256 digest' | sed 's/.*digest: //')
+          certs=$("$signer" verify --print-certs "$f")
+          fp=$(echo "$certs" | grep -m1 'certificate SHA-256 digest' | sed 's/.*digest: //')
+          owner=$(echo "$certs" | grep -m1 'certificate DN' | sed 's/.*DN: //')
+          echo "::notice title=Release key::$f signed by $owner, SHA-256 $fp"
+          sha=$(sha256sum "$f" | cut -d' ' -f1)
           {
             echo "UP Wallet for Android $GITHUB_REF_NAME (prototype), built from commit ${GITHUB_SHA::7}."
             echo
             echo "Signed with the release key, certificate SHA-256 \`$fp\`."
             echo
+            echo "SHA-256 of the APK (\`up-wallet-$GITHUB_REF_NAME.apk\` and \`up-wallet.apk\` are the same file): \`$sha\`."
+            echo
             echo "Install: open the .apk on the phone and allow installing from that source. The app creates its own phone key; authorize it once on your Universal Profile (on LUKSO with LUKSO's own wallet, on the other networks from the site's Backup page), as the README says: https://github.com/ChainIntegrate/up-wallet-android#readme"
             echo
             echo "Privacy policy: https://crosschain-lukso.chainintegrate.it/up-wallet-app-privacy.html"
-          } > notes.md
-          gh release upload "$GITHUB_REF_NAME" "up-wallet-$GITHUB_REF_NAME.apk" --clobber
+          } > "$RUNNER_TEMP/notes.md"
+          gh release upload "$GITHUB_REF_NAME" "$f" --clobber
           # The same file under a fixed name: .../releases/latest/download/up-wallet.apk never changes.
-          cp "up-wallet-$GITHUB_REF_NAME.apk" "$RUNNER_TEMP/up-wallet.apk"
+          cp "$f" "$RUNNER_TEMP/up-wallet.apk"
           gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/up-wallet.apk" --clobber
-          gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+          gh release edit "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
         with:
           name: up-wallet-apk
-          path: up-wallet-*.apk
+          path: up-wallet-v*.apk
           retention-days: 30
