@@ -238,7 +238,7 @@ To take a newer version of the page, change the commit in `UPSTREAM.json`.
 `versionName` is `major.minor.patch`; `versionCode` (in `android/app/build.gradle`) goes up by 1 with
 every published build, whatever the name. The release tag is `v<versionName>`.
 
-- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.9.x.
+- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.10.2.
 - **patch** (0.8.0 → 0.8.1): fixes and small additions, and a page update from Cross_Chain.
 - **minor** for the intermediate milestones:
   - **0.8.0** (done): call decoding from any verified contract's ABI (Base, Arbitrum One, Arc), contracts
@@ -272,6 +272,10 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     admin controller" note);
   - **0.10.0** (minor, structural): the signing window (above), reviewed by two providers right after
     its release; the panel "This phone" links to the LUKSO authorization page on LUKSO;
+  - **0.10.1** (patch): the review of 2026-11-04 (AND-01, AND-02: typed data by the signed type, the
+    arguments of the UP's calls in the signing window); a new release announced in the app; from it, the
+    releases are full GitHub releases;
+  - **0.10.2** (patch): page 0.14.2 (Alchemy's token list kept when only its NFT API refuses);
   - **0.10.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
@@ -328,11 +332,18 @@ with Subresource Integrity (W-tel); the page's Content-Security-Policy, with its
 by the build (N-3, see "What the app adds to the page"); signatures not made out to the UP flagged
 (SIWE, Permit, EIP-3009) and a token that answers `false` refused (I-7, L-8). Not a professional audit.
 
-**Last review (2026-10-29).** The external AI-assisted review of the whole project (Cross_Chain's
+**Review of 2026-10-29.** The external AI-assisted review of the whole project (Cross_Chain's
 `AUDIT.md`, section 17) covered the app at `8d3f363` (0.9.7), with the new browser extension: **not a
 professional audit, but an in-depth one.** No Critical, High or Medium; the fixes of the 2026-10-26 review
 verified in the code (PK-2 in `app/phone-key.js`); the Key Manager's `execute(bytes)` decoded in the
-fingerprint prompt noted as trusted display. Nothing open on the app.
+fingerprint prompt noted as trusted display.
+
+**Last review (2026-11-04).** Two providers, after 0.10.0 (`audits/2026-11-04-review.md`; summary in
+Cross_Chain's `AUDIT.md`, section 19): AND-01 and AND-02 (Medium, the signing window) fixed in 0.10.1;
+the release workflow (AND-04) and the privacy notice's text (AND-06) on 2026-11-24. Open, with the next
+release: AND-03 (the network's name and the payer in the signing window), AND-05 (a native confirmation
+before deleting the phone key), the diagnostic log's redaction, the license files in the APK and the
+explicit device-to-device transfer rules (A05, A08).
 
 ## License
 
