@@ -78,11 +78,12 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
         let pl;
         try { pl = window.UpwSignPlan.plan(JSON.parse(o.request), window.__pk.wallet.address, o.lang); }
         catch (e) { throw Object.assign(new Error(e.message), { code: String(e.code) }); }
-        window.__pk.prompts.push(["sign", pl.title, pl.digest, pl.rows, o.lang, pl.warnings, pl.danger || []]);
+        window.__pk.prompts.push(["sign", pl.title, pl.digest, pl.rows, o.lang, pl.warnings, pl.danger || [], pl.site, pl.own]);
         if (window.__pk.cancel) throw Object.assign(new Error("User rejected the request."), { code: "4001" });
         return { result: JSON.stringify(pl.finish(ethers.Signature.from(window.__pk.wallet.signingKey.sign(pl.digest).serialized))) };
       },
-      async remove() { window.__pk.wallet = null; localStorage.removeItem("__pkTest"); },
+      // The native dialog (R10): window.__pk.removeAnswer is what the user presses in it.
+      async remove(o) { window.__pk.removeAsked = (window.__pk.removeAsked || []).concat([o && o.lang]); if (window.__pk.removeAnswer === "cancel") throw Object.assign(new Error("canceled"), { code: "CANCELED" }); window.__pk.wallet = null; localStorage.removeItem("__pkTest"); },
     };
   });
   await p.goto("https://localhost/up-wallet.html");
@@ -187,7 +188,7 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   }, [ser(op), H]);
   ck("PK-2: the gas relay has the phone key sign the operation (upwallet_signUserOperation): the signature is the personal_sign of the hash the page computed",
     ethers.isHexString(relay.sig, 65) && ethers.verifyMessage(ethers.getBytes(H), relay.sig) === sig.addr && relay.logs.some((m) => /firmato/i.test(m)), JSON.stringify(relay));
-  ck("PK-4: its window says the operation, the UP, the recipient, the value, the function and who pays the gas", relay.subtitle === "Operazione della UP su Base" && row(relay.desc, "UP") === UP && row(relay.desc, "Verso") === ethers.getAddress(TO) && row(relay.desc, "Valore") === "0.01 ETH" && row(relay.desc, "Funzione") === "0x12345678: non decodificata" && /pagato dal sito/.test(row(relay.desc, "Gas")), JSON.stringify([relay.subtitle, relay.desc]));
+  ck("PK-4: its window says the operation, the UP, the recipient, the value, the function and who pays the gas (the paymaster named in the operation, R3)", relay.subtitle === "Operazione della UP su Base" && row(relay.desc, "UP") === UP && row(relay.desc, "Verso") === ethers.getAddress(TO) && row(relay.desc, "Valore") === "0.01 ETH" && row(relay.desc, "Funzione") === "0x12345678: non decodificata" && /pagato dal paymaster 0x[0-9a-fA-F]{40} \(gas sponsorizzato\)/.test(row(relay.desc, "Gas")), JSON.stringify([relay.subtitle, relay.desc]));
   // page 0.14.4 / app 0.10.3: a call the window does not decode by itself, described from the page's signature
   const vaultIface = new ethers.Interface(["function deposit(uint256 assets, address receiver)"]);
   const hinted = await p.evaluate(async ([o]) => {
@@ -218,6 +219,22 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   // cancel, networks, refusals
   const cancel = await p.evaluate(async () => { window.__pk.cancel = true; try { await signerProvider.request({ method: "personal_sign", params: ["0x01", window.__pk.wallet.address] }); return "signed"; } catch (e) { return e.code; } finally { window.__pk.cancel = false; } });
   ck("the signing window closed by the user: 4001 (user rejected), as a wallet answers", cancel === 4001, String(cancel));
+  // R3: the signing window names the dApp of the WalletConnect request the page has open; none when the page asks
+  const bound = await p.evaluate(async () => {
+    const sign = async () => { await signerProvider.request({ method: "personal_sign", params: [ethers.hexlify(ethers.toUtf8Bytes("chi lo chiede")), window.__pk.wallet.address] }); const x = window.__pk.prompts.at(-1); return [x[7], x[8]]; };
+    const savedKit = walletKit, savedPending = pending;
+    walletKit = { getActiveSessions: () => ({ t1: { peer: { metadata: { url: "https://app.example/swap?x=1" } } } }) };
+    pending = { kind: "sign", topic: "t1", id: 1 };
+    const forSite = await sign();
+    pending = { kind: "tx", topic: "t1", id: 2 };
+    const otherKind = await sign();
+    pending = null;
+    const own = await sign();
+    walletKit = savedKit; pending = savedPending;
+    return { forSite, otherKind, own };
+  });
+  ck("R3: a dApp's request: the signing window names the dApp (its WalletConnect URL); a signature of another kind, or the page's own, is said to be the wallet's",
+    bound.forSite[0] === "https://app.example (WalletConnect)" && bound.forSite[1] === false && bound.otherKind[0] == null && bound.otherKind[1] === true && bound.own[0] == null && bound.own[1] === true, JSON.stringify(bound));
   const other = await p.evaluate(async () => { try { await signerProvider.request({ method: "personal_sign", params: ["0x01", "0x" + "99".repeat(20)] }); return "signed"; } catch (e) { return e.code; } });
   ck("a signature for another account: refused", other === 4100, String(other));
   const ethSign = await p.evaluate(async () => { try { await signerProvider.request({ method: "eth_sign", params: [] }); return "signed"; } catch (e) { return e.code; } });
@@ -263,11 +280,18 @@ const GDB = new ethers.Interface(["function getDataBatch(bytes32[]) view returns
   const back = await p.evaluate(() => ({ up: document.getElementById("upAddress").value, signer: typeof signerAddress !== "undefined" ? signerAddress : null, key: window.__pk.wallet && window.__pk.wallet.address, prompts: window.__pk.prompts.length, sim: document.getElementById("simulateOnly").checked }));
   ck("at every opening: the last UP, the phone key (without a fingerprint prompt) and the \"Only simulation\" choice come back", back.up === UP && back.signer && back.key && back.signer.toLowerCase() === back.key.toLowerCase() && back.prompts === 0 && back.sim === false, JSON.stringify({ ...back, before: nPrompts }));
 
-  // delete
-  p.on("dialog", (d) => d.accept());
-  await p.evaluate(() => { [...document.querySelectorAll("#pkPanel button")].find((x) => /Elimina/.test(x.textContent)).click(); });
+  // delete: asked in the phone's own dialog (R10), not in the page
+  const pageDialogs = [];
+  p.on("dialog", (d) => { pageDialogs.push(d.message()); d.accept(); });
+  await p.evaluate(() => { window.__pk.removeAnswer = "cancel"; [...document.querySelectorAll("#pkPanel button")].find((x) => /Elimina/.test(x.textContent)).click(); });
+  await p.waitForFunction(() => (window.__pk.removeAsked || []).length === 1);
+  await new Promise((r) => setTimeout(r, 300));
+  const kept = await p.evaluate(() => !!window.__pk.wallet && !/Nessuna chiave/.test(document.getElementById("pkPanel").innerText));
+  ck("R10: deleting asks in the phone's native dialog; cancelled there, the key stays", kept, "");
+  await p.evaluate(() => { window.__pk.removeAnswer = "delete"; [...document.querySelectorAll("#pkPanel button")].find((x) => /Elimina/.test(x.textContent)).click(); });
   await p.waitForFunction(() => !window.__pk.wallet && /Nessuna chiave/.test(document.getElementById("pkPanel").innerText));
-  ck("delete (after a confirmation that says to revoke it first): no key left", true);
+  const asked = await p.evaluate(() => window.__pk.removeAsked);
+  ck("R10: confirmed in the native dialog (in the page's language): no key left; no confirmation in the page itself", asked.join(",") === "it,it" && pageDialogs.length === 0, JSON.stringify({ asked, pageDialogs }));
   ck("no page errors", errs.length === 0, errs.join(" | "));
 
   await b.close();

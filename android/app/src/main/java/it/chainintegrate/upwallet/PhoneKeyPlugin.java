@@ -49,7 +49,8 @@ import javax.crypto.spec.GCMParameterSpec;
  *   create({ title, subtitle })       → { address }        (asks for the fingerprint)
  *   request({ request, lang })        → { result }         (the signing window's answer, JSON: a signature
  *                                                          or a signed transaction; asks for the fingerprint)
- *   remove()                          → {}
+ *   remove({ lang })                  → {}                 (asks in a native dialog; CANCELED if the user
+ *                                                          does not confirm)
  *
  * Errors: code "CANCELED" (the user closed the prompt), "NO_AUTH" (no fingerprint or screen lock set
  * up), "INVALIDATED" (Android dropped the AES key, e.g. the screen lock was removed: the phone key is
@@ -126,15 +127,34 @@ public class PhoneKeyPlugin extends Plugin {
         getActivity().startActivity(new android.content.Intent(getContext(), SignerActivity.class));
     }
 
+    // Deleting the key asks the user in a native dialog, which the page cannot answer: a fault or a script in the
+    // page cannot destroy the key by itself (review of 2026-11-24, R10). Cancelled: rejected with CANCELED.
     @PluginMethod
     public void remove(PluginCall call) {
+        final boolean it = "it".equals(call.getString("lang", "en"));
+        final android.app.Activity activity = getActivity();
+        if (activity == null) { call.reject("no activity", "FAILED"); return; }
+        activity.runOnUiThread(() -> {
+            final boolean[] answered = { false };
+            new android.app.AlertDialog.Builder(activity)
+                .setTitle(it ? "Eliminare la chiave del telefono?" : "Delete the phone key?")
+                .setMessage(it
+                    ? "Non si può recuperare. Prima manda alla UP il suo saldo (\"Questo telefono\", su ogni rete dove ne ha) e revocala su ogni rete (sito, pagina Backup), altrimenti resta un controller della UP che nessuno può usare."
+                    : "It cannot be recovered. First send its balance to the UP (\"This phone\", on every network where it has some) and revoke it on every network (site, Backup page), or it stays a controller of the UP that nobody can use.")
+                .setNegativeButton(it ? "Annulla" : "Cancel", (d, w) -> { answered[0] = true; call.reject("canceled", "CANCELED"); })
+                .setPositiveButton(it ? "Elimina" : "Delete", (d, w) -> { answered[0] = true; deleteKey(); call.resolve(); })
+                .setOnDismissListener((d) -> { if (!answered[0]) call.reject("canceled", "CANCELED"); })
+                .show();
+        });
+    }
+
+    private void deleteKey() {
         try {
             KeyStore ks = KeyStore.getInstance(ANDROID_KEYSTORE);
             ks.load(null);
             if (ks.containsAlias(ALIAS)) ks.deleteEntry(ALIAS);
         } catch (Exception e) { /* the stored data goes anyway */ }
         prefs().edit().clear().commit();
-        call.resolve();
     }
 
     private interface WithCipher { void run(Cipher c) throws Exception; }

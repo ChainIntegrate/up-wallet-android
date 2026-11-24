@@ -1,0 +1,11 @@
+# Line endings: LF in the repository and in every checkout (review of 2026-11-24, R30), so the web build and
+# its tests are the same on every system. Gradle's Windows script keeps CRLF; binaries stay as they are.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.keystore binary
+*.jks binary

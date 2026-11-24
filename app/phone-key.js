@@ -56,9 +56,6 @@ const T = {
   sweepNoUp: () => (en() ? "Choose the UP in the page first." : "Prima scegli la UP nella pagina."),
   sweepLow: () => (en() ? "The balance does not cover the transfer's fee." : "Il saldo non copre la commissione del trasferimento."),
   sweepSent: (h) => (en() ? `Sent to the UP: ${h}` : `Inviato alla UP: ${h}`),
-  removeAsk: () => (en()
-    ? "Delete the phone key from this phone? It cannot be recovered. First send its balance to the UP (\"This phone\", on every network where it has some) and revoke it on every network (site, Backup page), or it stays a controller of the UP that nobody can use."
-    : "Eliminare la chiave del telefono? Non si può recuperare. Prima manda alla UP il suo saldo (\"Questo telefono\", su ogni rete dove ne ha) e revocala su ogni rete (sito, pagina Backup), altrimenti resta un controller della UP che nessuno può usare."),
   noAuth: () => (en() ? "Set up a fingerprint or a screen lock on the phone first." : "Prima imposta un'impronta o un blocco schermo sul telefono."),
   invalidated: () => (en()
     ? "The phone key can no longer be unlocked (the screen lock was changed or removed). Delete it, create a new one, and revoke the old address from the site's Backup page."
@@ -173,7 +170,22 @@ async function ask(req) {
   }
 }
 // The dApp asking, for the signing window's header: the WalletConnect session the page's request window is for.
-const site = () => (typeof window.__upwalletRequestSite === "string" ? window.__upwalletRequestSite.slice(0, 200) : null);
+// The dApp asking, for the signing window's header (review of 2026-11-24, R3): the WalletConnect session of the
+// request the page has open (up-wallet.html's `pending`), when its kind matches this signature (a dApp's
+// message or typed data; a dApp's transaction, sent by the key or as an operation of the UP through the gas
+// relay); none when the page itself asks, and the window then says so. The URL is the one the dApp gave
+// WalletConnect, which the page checked with WalletConnect's Verify before showing the request.
+/* global pending, walletKit */
+function siteFor(kind) {
+  try {
+    const p = typeof pending !== "undefined" ? pending : null;
+    if (!p || !p.topic) return null;
+    if (!(p.kind === "sign" ? ["message", "typed"] : ["tx", "userop"]).includes(kind)) return null;
+    const s = typeof walletKit !== "undefined" && walletKit ? walletKit.getActiveSessions()[p.topic] : null;
+    const u = s && s.peer && s.peer.metadata && s.peer.metadata.url;
+    return u ? `${new URL(u).origin} (WalletConnect)` : null;
+  } catch (e) { return null; }
+}
 const sameAddr = (a) => typeof a === "string" && ethers.isAddress(a) && address && ethers.getAddress(a) === address;
 
 // ---- the requests (the signing window computes what is signed from them)
@@ -189,7 +201,7 @@ async function personalSign(params) {
   // (AUDIT 2026-10-26 PK-2). The page's gas relay signs operations with upwallet_signUserOperation instead.
   // The signing window refuses it too (sign-plan.js); here it does not even open.
   if (bytes.length === 32) throw rpcError(4100, T.opaque32());
-  return ask({ kind: "message", message: msg, account: who, site: site() });
+  return ask({ kind: "message", message: msg, account: who, site: siteFor("message") });
 }
 
 // ---- an ERC-4337 operation of the UP (the site relayer pays the gas): the signing window computes its hash
@@ -213,13 +225,13 @@ async function signUserOperation(params) {
   const up = upEl && ethers.isAddress(upEl.value.trim()) ? ethers.getAddress(upEl.value.trim()) : null;
   if (!up || op.sender !== up) throw rpcError(4100, T.badOp("not the UP chosen in the page"));
   const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
-  return ask(await withHints({ kind: "userop", op: str(op), entryPoint, chainId: net.chainId, up, net: { name: net.name, currency: net.currency || "" } }));
+  return ask(await withHints({ kind: "userop", op: str(op), entryPoint, chainId: net.chainId, up, net: { name: net.name, currency: net.currency || "" }, site: siteFor("userop") }));
 }
 async function signTyped(params) {
   const [a, data] = params || [];
   if (!sameAddr(a)) throw rpcError(4100, "not the phone key's account");
   const n = await currentNet();
-  return ask({ kind: "typed", account: a, data: typeof data === "string" ? data : JSON.stringify(data), chainId: n ? n.chainId : null, site: site() });
+  return ask({ kind: "typed", account: a, data: typeof data === "string" ? data : JSON.stringify(data), chainId: n ? n.chainId : null, site: siteFor("typed") });
 }
 // The function signatures the wallet page knows for the calls of a request (up-wallet.html): the signing
 // window checks each against the data before it shows the call by name and arguments (sign-plan.js).
@@ -252,7 +264,7 @@ async function sendTransaction(params) {
   }
   const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
   // The signing window shows the transaction as signed (and, through the Key Manager, what the UP does).
-  const raw = await ask(await withHints({ kind: "tx", tx: str({ ...base, nonce, gasLimit, chainId: net.chainId, ...fees }), up: pageUp(), net: { name: net.name, currency: net.currency || "" }, site: site() }));
+  const raw = await ask(await withHints({ kind: "tx", tx: str({ ...base, nonce, gasLimit, chainId: net.chainId, ...fees }), up: pageUp(), net: { name: net.name, currency: net.currency || "" }, site: siteFor("tx") }));
   const t = ethers.Transaction.from(raw);
   if (ethers.getAddress(t.from) !== address || Number(t.chainId) !== net.chainId) throw rpcError(-32603, "signature check failed");
   return rpc.send("eth_sendRawTransaction", [raw]);
@@ -437,9 +449,10 @@ function renderPanel() {
     const b = btn(T.sweep(), async () => { b.disabled = true; sweepNote = ""; try { await sweep(); } catch (e) { sweepNote = e.message || String(e); renderPanel(); } });
   }
   btn(T.remove(), async () => {
-    if (!window.confirm(T.removeAsk())) return;
+    // The phone asks in its own dialog (review of 2026-11-24, R10): the page cannot confirm it for the user.
     diag("PhoneKey: remove");
-    try { await PK.remove(); } catch (e) { /* gone anyway */ }
+    try { await PK.remove({ lang: en() ? "en" : "it" }); }
+    catch (e) { if (e && e.code === "CANCELED") { diag("PhoneKey: remove cancelled"); return; } }
     await status();
     emit("accountsChanged", []);
     renderPanel();

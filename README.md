@@ -238,7 +238,7 @@ To take a newer version of the page, change the commit in `UPSTREAM.json`.
 `versionName` is `major.minor.patch`; `versionCode` (in `android/app/build.gradle`) goes up by 1 with
 every published build, whatever the name. The release tag is `v<versionName>`.
 
-- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.10.3.
+- **0.x: prototype.** Installed from the APK on GitHub, outside the Play Store. Today: 0.10.4.
 - **patch** (0.8.0 → 0.8.1): fixes and small additions, and a page update from Cross_Chain.
 - **minor** for the intermediate milestones:
   - **0.8.0** (done): call decoding from any verified contract's ABI (Base, Arbitrum One, Arc), contracts
@@ -280,6 +280,12 @@ every published build, whatever the name. The release tag is `v<versionName>`.
     knows (their signature checked against the data in the window), with a warning only for a permission,
     an address that is not the UP, extra bytes or a call neither side decodes, and red alerts for a
     description that does not match, a DELEGATECALL, a change of the UP's owner or controllers;
+  - **0.10.4** (patch, review of 2026-11-24): the signing window names the dApp of the WalletConnect
+    request it is for (its URL as the dApp gave it to WalletConnect), or says the wallet itself asks; the
+    network's name and currency come from the chain id, and the gas line says who pays (the paymaster
+    named in the operation, or the UP) (R3); bidi and zero-width characters are shown as `[U+XXXX]` (R8);
+    deleting the phone key asks in Android's own dialog, which the page cannot answer (R10); the Gradle
+    distribution's SHA-256 is pinned in `gradle-wrapper.properties` (R12); `.gitattributes` keeps LF (R30);
   - **0.10.x**: aligning the profile from the app; then the Play Store candidate, for the closed test.
 - **1.0.0: first public release on the Play Store**, once all of these hold:
   1. the developer account is verified: an **organization** Play Console account, since Google
